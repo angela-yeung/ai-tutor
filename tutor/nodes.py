@@ -22,7 +22,7 @@ def llm_call(
     user_message: str,
     history: Optional[list] = None,
 ) -> Optional[str]:
-    """Wraps a Claude API call. Returns None on any failure."""
+    """Wraps a LLM API call. Returns None on any failure."""
     try:
         messages: list = [SystemMessage(content=system_prompt)]
         for msg in (history or []):
