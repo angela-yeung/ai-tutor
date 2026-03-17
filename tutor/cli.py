@@ -69,6 +69,10 @@ def run() -> None:
         if not user_input:
             continue
 
+        if user_input.lower().rstrip("!.,?") in ("hi", "hello", "hey", "howdy", "hiya", "greetings", "sup", "yo"):
+            print("\nTutor: Hi! What would you like to learn today?\n")
+            continue
+
         try:
             result = tutor_app.invoke(
                 {"student_input": user_input},
