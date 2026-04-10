@@ -7,7 +7,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 load_dotenv()
 
-from tutor.graph import tutor_app
+from tutor.graph import tutor
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,22 +23,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_response(state: dict) -> None:
+    response = state.get("current_response", "")
+    if response:
+        print(f"\nTutor: {response}\n")
+
+
+def _print_concepts_needing_review(concepts: list) -> None:
+    if concepts:
+        print("📋 Topics to revisit with a grown-up: " + ", ".join(concepts))
+
+
 def run() -> None:
     args = build_parser().parse_args()
 
     if args.resume:
         thread_id = args.resume
         print(f"\n=== Resuming session {thread_id} ===\n")
-        # Inject a resume trigger so entry_router sees session_paused=True.
-        # On resume, the checkpointed state already has session_paused=True,
-        # so we just invoke with the thread_id and a placeholder student_input.
         initial_input: dict = {"student_input": "I'm back, let's continue."}
     else:
         thread_id = str(uuid4())
         print(f"\n=== New session started ===")
         print(f"Session ID: {thread_id}")
         print("(Save this ID to resume later with --resume <SESSION_ID>)\n")
-        initial_input = None  # first user message will set student_input
+        initial_input = None
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -48,9 +56,14 @@ def run() -> None:
     # On resume, fire off the resume node before the main loop
     if args.resume:
         try:
-            result = tutor_app.invoke(initial_input, config=config)
+            result = tutor.invoke(initial_input, config=config)
             _print_response(result)
-            if _should_exit(result, thread_id):
+            if result.get("session_paused"):
+                print(f"\nSession paused. Your session ID is: {thread_id}")
+                print(f"Type: python -m tutor.cli --resume {thread_id} to continue.")
+                state_snapshot = tutor.get_state(config)
+                concepts = state_snapshot.values.get("concepts_needing_review", [])
+                _print_concepts_needing_review(concepts)
                 return
         except Exception as e:
             print("Hmm, something went wrong connecting to the session. Let's try again!")
@@ -60,17 +73,23 @@ def run() -> None:
             user_input = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye! See you next time.")
+            state_snapshot = tutor.get_state(config)
+            concepts = state_snapshot.values.get("concepts_needing_review", [])
+            _print_concepts_needing_review(concepts)
             sys.exit(0)
 
         if user_input.lower() in ("quit", "exit", "q"):
             print("Goodbye! See you next time.")
+            state_snapshot = tutor.get_state(config)
+            concepts = state_snapshot.values.get("concepts_needing_review", [])
+            _print_concepts_needing_review(concepts)
             sys.exit(0)
 
         if not user_input:
             continue
 
         try:
-            result = tutor_app.invoke(
+            result = tutor.invoke(
                 {"student_input": user_input},
                 config=config,
             )
@@ -82,32 +101,17 @@ def run() -> None:
 
         _print_response(result)
 
-        if _should_exit(result, thread_id):
+        if result.get("session_paused"):
+            print(f"\nSession paused. Your session ID is: {thread_id}")
+            print(f"Type: python -m tutor.cli --resume {thread_id} to continue.")
+            state_snapshot = tutor.get_state(config)
+            concepts = state_snapshot.values.get("concepts_needing_review", [])
+            _print_concepts_needing_review(concepts)
             return
 
 
-def _print_response(state: dict) -> None:
-    response = state.get("current_response", "")
-    if response:
-        print(f"\nTutor: {response}\n")
-
-
-def _should_exit(state: dict, thread_id: str) -> bool:
-    if state.get("session_paused"):
-        print("─" * 50)
-        print("Session paused. I hope you feel better soon!")
-        print(f"Resume anytime with:\n  python -m tutor.cli --resume {thread_id}")
-        print("─" * 50)
-        return True
-
-    if state.get("session_complete"):
-        print("─" * 50)
-        print("Great work today! You did an amazing job.")
-        print("Start a new session anytime by running: python -m tutor.cli")
-        print("─" * 50)
-        return True
-
-    return False
+def main() -> None:
+    run()
 
 
 if __name__ == "__main__":
