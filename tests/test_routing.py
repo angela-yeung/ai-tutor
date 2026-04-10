@@ -1,52 +1,85 @@
-"""Tests for check_understanding routing logic.
+"""Tests for routing functions in tutor/graph.py.
 
-These tests are pure unit tests — no LLM calls are made.
-`route_after_check` is extracted as a standalone function in graph.py
-so it can be tested independently of the compiled graph.
+All routing functions are pure (no LLM calls), so no mocking is needed.
 """
 
 import pytest
-from tutor.graph import route_after_check
+from tutor.graph import entry_router, route_after_classify, route_after_reasoning
 
 
-BASE_STATE = {
-    "student_input": "",
-    "concept": "addition",
-    "hints_given": 1,
-    "understanding_level": "",
-    "session_history": [],
-    "current_response": "",
-    "incorrect_attempts": 0,
-    "session_paused": False,
-    "session_complete": False,
-}
+# ---------------------------------------------------------------------------
+# entry_router
+# ---------------------------------------------------------------------------
+
+def test_entry_router_paused_goes_to_resume():
+    state = {
+        "session_paused": True,
+        "strategies_tried": [],
+        "conversation_history": [],
+        "concepts_needing_review": [],
+    }
+    assert entry_router(state) == "resume_session"
 
 
-@pytest.mark.parametrize(
-    "understanding_level, expected_node",
-    [
-        ("got_it",      "reinforce_concept"),
-        ("progressing", "scaffold_hint"),
-        ("stuck",       "scaffold_hint"),
-        ("incorrect",   "scaffold_hint"),
-        ("frustrated",  "encourage"),
-        ("distressed",  "escalate"),
-    ],
-)
-def test_route_after_check(understanding_level: str, expected_node: str) -> None:
-    state = {**BASE_STATE, "understanding_level": understanding_level}
-    result = route_after_check(state)
-    assert result == expected_node, (
-        f"Expected '{expected_node}' for level '{understanding_level}', got '{result}'"
-    )
+def test_entry_router_normal_goes_to_classify():
+    state = {
+        "session_paused": False,
+        "strategies_tried": [],
+        "conversation_history": [],
+        "concepts_needing_review": [],
+    }
+    assert entry_router(state) == "classify_question"
 
 
-def test_unknown_level_defaults_to_scaffold_hint() -> None:
-    """Unrecognised classification should fall back to scaffold_hint."""
-    state = {**BASE_STATE, "understanding_level": "some_unknown_value"}
-    assert route_after_check(state) == "scaffold_hint"
+def test_entry_router_no_paused_key_goes_to_classify():
+    assert entry_router({}) == "classify_question"
 
 
-def test_empty_level_defaults_to_scaffold_hint() -> None:
-    state = {**BASE_STATE, "understanding_level": ""}
-    assert route_after_check(state) == "scaffold_hint"
+def test_entry_router_paused_false_explicit():
+    """Explicit False on session_paused still routes to classify_question."""
+    assert entry_router({"session_paused": False}) == "classify_question"
+
+
+# ---------------------------------------------------------------------------
+# route_after_classify
+# ---------------------------------------------------------------------------
+
+def test_route_after_classify_factual():
+    assert route_after_classify({"question_type": "factual"}) == "factual_react_loop"
+
+
+def test_route_after_classify_reasoning():
+    assert route_after_classify({"question_type": "reasoning"}) == "reasoning_react_loop"
+
+
+def test_route_after_classify_unknown_defaults_to_reasoning():
+    assert route_after_classify({"question_type": "unknown"}) == "reasoning_react_loop"
+
+
+def test_route_after_classify_missing_key_defaults_to_reasoning():
+    assert route_after_classify({}) == "reasoning_react_loop"
+
+
+def test_route_after_classify_empty_string_defaults_to_reasoning():
+    assert route_after_classify({"question_type": ""}) == "reasoning_react_loop"
+
+
+# ---------------------------------------------------------------------------
+# route_after_reasoning
+# ---------------------------------------------------------------------------
+
+def test_route_after_reasoning_paused_goes_to_escalate():
+    assert route_after_reasoning({"session_paused": True}) == "escalate"
+
+
+def test_route_after_reasoning_normal_goes_to_format():
+    assert route_after_reasoning({"session_paused": False}) == "format_response"
+
+
+def test_route_after_reasoning_no_paused_key_goes_to_format():
+    assert route_after_reasoning({}) == "format_response"
+
+
+def test_route_after_reasoning_paused_false_goes_to_format():
+    """Explicit False routes to format_response."""
+    assert route_after_reasoning({"session_paused": False}) == "format_response"
