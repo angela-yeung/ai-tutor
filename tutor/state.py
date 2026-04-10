@@ -1,13 +1,13 @@
-from typing import TypedDict, List, Dict
+from typing import TypedDict, Annotated
+import operator
 
 
 class TutorState(TypedDict):
     student_input: str
-    concept: str
-    hints_given: int
-    understanding_level: str  # got_it | progressing | stuck | incorrect | frustrated | distressed
-    session_history: List[Dict[str, str]]
-    current_response: str
-    incorrect_attempts: int
-    session_paused: bool
-    session_complete: bool
+    concept: str                                           # topic extracted by classify_question
+    question_type: str                                     # "factual" | "reasoning"
+    strategies_tried: Annotated[list, operator.add]        # strategies used so far (grows each turn)
+    conversation_history: Annotated[list, operator.add]    # {"role": ..., "content": ...} message log
+    current_response: str                                  # latest assistant response
+    session_paused: bool                                   # True when escalate is triggered
+    concepts_needing_review: Annotated[list, operator.add] # concepts flagged for adult follow-up
