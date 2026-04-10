@@ -90,10 +90,10 @@ class TestScaffoldHint:
         mock_llm.invoke.return_value = self._make_llm_response("Think of sharing cookies equally.")
 
         with patch("tutor.tools.ChatOpenAI", return_value=mock_llm):
-            result = scaffold_hint.invoke({
-                "concept": "division",
-                "strategies_tried": [],
-            })
+            result = scaffold_hint.func(
+                concept="division",
+                strategies_tried=[],
+            )
 
         assert isinstance(result, dict)
         assert result["strategy"] == "guiding_question"
@@ -104,10 +104,10 @@ class TestScaffoldHint:
         mock_llm.invoke.return_value = self._make_llm_response("Like slicing a pizza.")
 
         with patch("tutor.tools.ChatOpenAI", return_value=mock_llm):
-            result = scaffold_hint.invoke({
-                "concept": "fractions",
-                "strategies_tried": ["guiding_question"],
-            })
+            result = scaffold_hint.func(
+                concept="fractions",
+                strategies_tried=["guiding_question"],
+            )
 
         assert result["strategy"] == "analogy"
         assert result["hint"] == "Like slicing a pizza."
