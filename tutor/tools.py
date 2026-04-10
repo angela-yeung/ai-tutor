@@ -1,4 +1,5 @@
-import math
+import ast
+import operator as op_module
 import os
 
 from langchain_core.tools import tool
@@ -7,22 +8,32 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from tavily import TavilyClient
 
 
-_SAFE_BUILTINS = {
-    "abs": abs,
-    "divmod": divmod,
-    "float": float,
-    "int": int,
-    "max": max,
-    "min": min,
-    "pow": pow,
-    "range": range,
-    "round": round,
-    "str": str,
-    "sum": sum,
-    "True": True,
-    "False": False,
-    "None": None,
+_OPS = {
+    ast.Add: op_module.add,
+    ast.Sub: op_module.sub,
+    ast.Mult: op_module.mul,
+    ast.Div: op_module.truediv,
+    ast.Pow: op_module.pow,
+    ast.Mod: op_module.mod,
+    ast.FloorDiv: op_module.floordiv,
 }
+_UNARY_OPS = {
+    ast.USub: op_module.neg,
+    ast.UAdd: op_module.pos,
+}
+
+
+def _eval_node(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+        return _OPS[type(node.op)](_eval_node(node.left), _eval_node(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPS:
+        return _UNARY_OPS[type(node.op)](_eval_node(node.operand))
+    raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+
+
+_hint_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
 
 _VALID_STRATEGIES = [
     "guiding_question",
@@ -35,14 +46,13 @@ _VALID_STRATEGIES = [
 
 @tool
 def calculator(expression: str) -> str:
-    """Evaluates a simple arithmetic expression."""
+    """Evaluates a simple arithmetic expression (+-*/^%). Returns '' on error."""
     try:
-        result = eval(  # noqa: S307
-            expression,
-            {"__builtins__": _SAFE_BUILTINS, "math": math},
-            {},
-        )
-        return str(result)
+        tree = ast.parse(expression.strip(), mode="eval")
+        result = _eval_node(tree.body)
+        if isinstance(result, float) and result == int(result):
+            return str(int(result))
+        return str(round(result, 6))
     except Exception:
         return ""
 
@@ -64,7 +74,7 @@ def web_search(query: str) -> str:
 
 
 @tool
-def scaffold_hint(concept: str, strategies_tried: list) -> dict:
+def scaffold_hint(concept: str, strategies_tried: list[str]) -> dict:
     """Selects the best Socratic hint strategy not already tried.
 
     Note: the ValueError below is raised in the raw function body. Callers
@@ -82,7 +92,6 @@ def scaffold_hint(concept: str, strategies_tried: list) -> dict:
     if chosen_strategy is None:
         raise ValueError("All strategies exhausted")
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
     system_prompt = (
         f'You are a Socratic tutor for 6-year-old Grade 1 students. '
         f'Generate a {chosen_strategy} hint for the concept "{concept}". '
@@ -95,7 +104,7 @@ def scaffold_hint(concept: str, strategies_tried: list) -> dict:
         SystemMessage(content=system_prompt),
         HumanMessage(content=f"Generate a {chosen_strategy} hint for: {concept}"),
     ]
-    response = llm.invoke(messages)
+    response = _hint_llm.invoke(messages)
     hint_text = response.content.strip()
 
     return {"strategy": chosen_strategy, "hint": hint_text}

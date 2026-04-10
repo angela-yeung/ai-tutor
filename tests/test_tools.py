@@ -18,22 +18,19 @@ class TestCalculator:
         result = calculator.invoke({"expression": "10 / 4"})
         assert result == "2.5"
 
-    def test_blocks_import(self):
-        # __import__ is not in the whitelist — should return ""
-        result = calculator.invoke({"expression": "__import__('os').getcwd()"})
+    def test_blocks_object_traversal(self):
+        # AST walker rejects attribute access — object graph traversal blocked
+        result = calculator.invoke({"expression": "(1).__class__"})
         assert result == ""
 
-    def test_blocks_open(self):
-        result = calculator.invoke({"expression": "open('somefile')"})
+    def test_blocks_string_expression(self):
+        # AST walker only accepts numeric literals — strings are rejected
+        result = calculator.invoke({"expression": "'hello'"})
         assert result == ""
 
     def test_syntax_error_returns_empty(self):
         result = calculator.invoke({"expression": "2 +"})
         assert result == ""
-
-    def test_math_module_allowed(self):
-        result = calculator.invoke({"expression": "math.sqrt(9)"})
-        assert result == "3.0"
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +86,7 @@ class TestScaffoldHint:
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = self._make_llm_response("Think of sharing cookies equally.")
 
-        with patch("tutor.tools.ChatOpenAI", return_value=mock_llm):
+        with patch("tutor.tools._hint_llm", mock_llm):
             result = scaffold_hint.func(
                 concept="division",
                 strategies_tried=[],
@@ -103,7 +100,7 @@ class TestScaffoldHint:
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = self._make_llm_response("Like slicing a pizza.")
 
-        with patch("tutor.tools.ChatOpenAI", return_value=mock_llm):
+        with patch("tutor.tools._hint_llm", mock_llm):
             result = scaffold_hint.func(
                 concept="fractions",
                 strategies_tried=["guiding_question"],
