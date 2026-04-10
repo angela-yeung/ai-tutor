@@ -1,0 +1,203 @@
+[
+  {
+    "id": "factual_web_search",
+    "description": "Factual question about France routes to factual_react_loop",
+    "input_state": {
+      "student_input": "What is the capital of France?",
+      "concept": "",
+      "question_type": "factual",
+      "strategies_tried": [],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "factual_react_loop",
+    "expected_fields": {"question_type": "factual"}
+  },
+  {
+    "id": "reasoning_first_hint",
+    "description": "Reasoning question with no strategies tried routes to reasoning_react_loop",
+    "input_state": {
+      "student_input": "What is 7 + 8?",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": [],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {"question_type": "reasoning"}
+  },
+  {
+    "id": "reasoning_second_hint",
+    "description": "With guiding_question tried, analogy should be next",
+    "input_state": {
+      "student_input": "I still don't get it",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question"],
+      "conversation_history": [
+        {"role": "user", "content": "What is 7 + 8?"},
+        {"role": "assistant", "content": "How many fingers do you have on one hand?"}
+      ],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  },
+  {
+    "id": "reasoning_got_it",
+    "description": "Student shows understanding — loop should confirm warmly",
+    "input_state": {
+      "student_input": "Oh! It is 15 because 7 plus 8 equals 15!",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question"],
+      "conversation_history": [
+        {"role": "user", "content": "What is 7 + 8?"},
+        {"role": "assistant", "content": "How many do you get if you count 7 then 8 more?"}
+      ],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  },
+  {
+    "id": "strategy_exhaustion",
+    "description": "All 5 strategies tried — should give direct answer and flag for review",
+    "input_state": {
+      "student_input": "I still don't know",
+      "concept": "addition to 20",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question", "analogy", "concrete_example", "sub_problem", "number_line"],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  },
+  {
+    "id": "distress_detection",
+    "description": "Distress detected — session_paused=True, routes to escalate",
+    "input_state": {
+      "student_input": "I hate maths I want to cry",
+      "concept": "subtraction",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question"],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "escalate",
+    "expected_fields": {"session_paused": true}
+  },
+  {
+    "id": "resume_session",
+    "description": "session_paused=True on entry routes to resume_session",
+    "input_state": {
+      "student_input": "I am back",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question"],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": true,
+      "concepts_needing_review": []
+    },
+    "expected_node": "resume_session",
+    "expected_fields": {"session_paused": false}
+  },
+  {
+    "id": "format_response_grade1",
+    "description": "format_response rewrites complex sentences to Grade 1 level",
+    "input_state": {
+      "student_input": "",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": [],
+      "conversation_history": [],
+      "current_response": "The mathematical operation of addition requires combining two numerical values to produce a sum, which in this case results in the integer fifteen.",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "format_response",
+    "expected_fields": {}
+  },
+  {
+    "id": "calculator_use",
+    "description": "Arithmetic verification with calculator tool in reasoning loop",
+    "input_state": {
+      "student_input": "Is 6 times 7 the same as 42?",
+      "concept": "multiplication",
+      "question_type": "reasoning",
+      "strategies_tried": [],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  },
+  {
+    "id": "incorrect_handling",
+    "description": "Student gives wrong answer — Socratic probe should follow",
+    "input_state": {
+      "student_input": "I think 7 plus 8 is 16",
+      "concept": "addition",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question"],
+      "conversation_history": [
+        {"role": "user", "content": "What is 7 + 8?"},
+        {"role": "assistant", "content": "What do you get if you start at 7 and count 8 more?"}
+      ],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  },
+  {
+    "id": "classify_greeting",
+    "description": "A greeting routes through classify_question (no special-case short-circuit)",
+    "input_state": {
+      "student_input": "Hello!",
+      "concept": "",
+      "question_type": "",
+      "strategies_tried": [],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "classify_question",
+    "expected_fields": {}
+  },
+  {
+    "id": "concepts_needing_review_populated",
+    "description": "After exhaustion, concepts_needing_review should include the concept",
+    "input_state": {
+      "student_input": "I give up",
+      "concept": "fractions",
+      "question_type": "reasoning",
+      "strategies_tried": ["guiding_question", "analogy", "concrete_example", "sub_problem", "number_line"],
+      "conversation_history": [],
+      "current_response": "",
+      "session_paused": false,
+      "concepts_needing_review": []
+    },
+    "expected_node": "reasoning_react_loop",
+    "expected_fields": {}
+  }
+]
