@@ -120,8 +120,10 @@ class TestScaffoldHint:
             "sub_problem",
             "number_line",
         ]
+        # Use .func() to call the raw function directly — .invoke() may swallow
+        # exceptions depending on the LangChain version.
         with pytest.raises(ValueError, match="All strategies exhausted"):
-            scaffold_hint.invoke({
-                "concept": "addition",
-                "strategies_tried": all_strategies,
-            })
+            scaffold_hint.func(
+                concept="addition",
+                strategies_tried=all_strategies,
+            )

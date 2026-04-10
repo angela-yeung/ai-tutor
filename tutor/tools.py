@@ -65,7 +65,14 @@ def web_search(query: str) -> str:
 
 @tool
 def scaffold_hint(concept: str, strategies_tried: list) -> dict:
-    """Selects the best Socratic hint strategy not already tried."""
+    """Selects the best Socratic hint strategy not already tried.
+
+    Note: the ValueError below is raised in the raw function body. Callers
+    using .invoke() should be aware that LangChain may handle (swallow) that
+    exception depending on the version — use .func() to reliably test the
+    raw ValueError path. This function is intentionally NOT decorated with
+    handle_tool_error=True so the exception propagates to graph-level callers.
+    """
     chosen_strategy = None
     for strategy in _VALID_STRATEGIES:
         if strategy not in strategies_tried:
