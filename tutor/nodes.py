@@ -1,323 +1,294 @@
-import os
-from typing import Optional
+import sys
 
+import openai
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import ToolMessage
 
 from tutor.state import TutorState
+from tutor.tools import calculator, web_search, scaffold_hint
 
-MODEL = "gpt-4o-mini"
+# ---------------------------------------------------------------------------
+# LLM instances
+# ---------------------------------------------------------------------------
+
+_classifier_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+_factual_llm = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools([web_search])
+_reasoning_llm = ChatOpenAI(model="gpt-4o", temperature=0.7).bind_tools([calculator, scaffold_hint])
+_format_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+
+# ---------------------------------------------------------------------------
+# Age rule
+# ---------------------------------------------------------------------------
 
 _AGE_RULE = (
-    "Use sentences of 10 words or fewer. "
-    "Only use words a 5-year-old knows. "
-    "Use examples only from toys, food, animals, or home objects."
+    "ALWAYS use sentences of 10 words or fewer. "
+    "ONLY use words a 6-year-old Grade 1 student would know. "
+    "ONLY use analogies from: toys, food, animals, everyday home objects, playground. "
+    "Use a warm, encouraging tone. Never say the student is wrong directly."
 )
 
-_llm = ChatOpenAI(model=MODEL)
 
+# ---------------------------------------------------------------------------
+# Node 1: classify_question
+# ---------------------------------------------------------------------------
 
-def llm_call(
-    system_prompt: str,
-    user_message: str,
-    history: Optional[list] = None,
-) -> Optional[str]:
-    """Wraps a LLM API call. Returns None on any failure."""
+def classify_question(state: TutorState) -> dict:
+    """Binary classify student input as factual or reasoning, extract concept."""
+    system_prompt = (
+        "Classify the student's question. "
+        "Output EXACTLY in this format: <type>|<concept> "
+        "where type is 'factual' or 'reasoning', and concept is the key topic in 3 words or fewer. "
+        "Examples: factual|capital of France, reasoning|addition to 20, factual|spider legs. "
+        "Only output the format, nothing else."
+    )
     try:
-        messages: list = [SystemMessage(content=system_prompt)]
-        for msg in (history or []):
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            if role == "user":
-                messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                messages.append(AIMessage(content=content))
-        messages.append(HumanMessage(content=user_message))
-        response = _llm.invoke(messages)
-        return response.content
-    except Exception as e:
-        print(f"\n[API ERROR] {e}\n")
-        return None
+        response = _classifier_llm.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": state["student_input"]},
+        ])
+        raw = response.content.strip()
+        parts = raw.split("|", 1)
+        if len(parts) == 2:
+            question_type = parts[0].strip().lower()
+            concept = parts[1].strip()
+            if question_type not in ("factual", "reasoning"):
+                question_type = "reasoning"
+        else:
+            question_type = "reasoning"
+            concept = state["student_input"][:50]
+    except (openai.APIError, openai.RateLimitError) as e:
+        print(f"[API ERROR] {e}", file=sys.stderr)
+        return {"current_response": "Oops! Something went wrong. Let us try again!"}
+
+    return {"question_type": question_type, "concept": concept}
 
 
 # ---------------------------------------------------------------------------
-# Node: assess_question
+# Node 2: factual_react_loop
 # ---------------------------------------------------------------------------
 
-def assess_question(state: TutorState) -> dict:
-    system = (
-        f"{_AGE_RULE} "
-        "You are a kind tutor. The student asked a question. "
-        "Identify the key learning concept in one short phrase. "
-        "Reply ONLY with that concept phrase — nothing else."
+def factual_react_loop(state: TutorState) -> dict:
+    """ReAct loop for factual questions using web_search."""
+    concept = state.get("concept", "your question")
+    system_prompt = (
+        f'You are a friendly tutor for a 6-year-old. '
+        f'The student asked a factual question about "{concept}". '
+        f'First, reason about whether you need to search for the answer. '
+        f'If you need current or specific information, use the web_search tool. '
+        f'Then give a warm, enriching answer with fun facts. '
+        f'{_AGE_RULE}'
     )
-    concept = llm_call(system, state["student_input"])
-    if concept is None:
-        concept = "your question"
 
-    # Build the opening hint in the same call to give an immediate response
-    opening_system = (
-        f"{_AGE_RULE} "
-        "You are a kind tutor helping a 5-year-old. "
-        "Ask ONE short guiding question to help them think. "
-        "Do NOT give the answer. Be warm and encouraging."
-    )
-    prompt = f"The student is learning: {concept}. They asked: {state['student_input']}"
-    response = llm_call(opening_system, prompt)
-    if response is None:
-        response = "Hmm, something went wrong. Let's try again!"
+    messages: list = [{"role": "system", "content": system_prompt}]
+    for msg in state.get("conversation_history", []):
+        messages.append(msg)
+    messages.append({"role": "user", "content": state["student_input"]})
 
-    history = list(state.get("session_history", []))
-    history.append({"role": "user", "content": state["student_input"]})
-    history.append({"role": "assistant", "content": response})
+    try:
+        response = None
+        while True:
+            response = _factual_llm.invoke(messages)
+            if not response.tool_calls:
+                break
+            # Append assistant message with tool calls
+            messages.append(response)
+            # Execute each tool call
+            for tc in response.tool_calls:
+                if tc["name"] == "web_search":
+                    result = web_search.invoke(tc["args"])
+                else:
+                    result = ""
+                messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+
+        final_response = response.content
+    except (openai.APIError, openai.RateLimitError) as e:
+        print(f"[API ERROR] {e}", file=sys.stderr)
+        return {"current_response": "Oops! Something went wrong. Let us try again!"}
 
     return {
-        "concept": concept.strip(),
-        "hints_given": 1,
-        "incorrect_attempts": 0,
-        "session_paused": False,
-        "session_complete": False,
-        "understanding_level": "",
-        "current_response": response,
-        "session_history": history,
+        "current_response": final_response,
+        "conversation_history": [
+            {"role": "user", "content": state["student_input"]},
+            {"role": "assistant", "content": final_response},
+        ],
     }
 
 
 # ---------------------------------------------------------------------------
-# Node: scaffold_hint
+# Node 3: reasoning_react_loop
 # ---------------------------------------------------------------------------
 
-def scaffold_hint(state: TutorState) -> dict:
-    concept = state.get("concept", "the topic")
-    hints_given = state.get("hints_given", 0)
-    incorrect_attempts = state.get("incorrect_attempts", 0)
+def reasoning_react_loop(state: TutorState) -> dict:
+    """ReAct loop for reasoning/problem-solving questions with strategy selection."""
+    concept = state.get("concept", "the problem")
+    strategies_tried = state.get("strategies_tried", [])
+    strategies_tried_str = ", ".join(strategies_tried) if strategies_tried else "none yet"
 
-    if incorrect_attempts > 2:
-        # Gentle direct correction after repeated incorrect attempts
-        system = (
-            f"{_AGE_RULE} "
-            "You are a kind tutor. The student got it wrong a few times. "
-            "Gently tell them the right answer. "
-            "Keep it simple and warm. Do not make them feel bad."
-        )
-        prompt = (
-            f"Concept: {concept}. "
-            f"Student said: {state.get('student_input', '')}. "
-            "Give a short, gentle, correct explanation."
-        )
-    elif hints_given == 0 or hints_given == 1:
-        # Hint 1: guiding question
-        system = (
-            f"{_AGE_RULE} "
-            "You are a kind tutor. Ask ONE short guiding question. "
-            "Help the student think. Do NOT give the answer."
-        )
-        prompt = (
-            f"Concept: {concept}. "
-            f"Student said: {state.get('student_input', '')}. "
-            "Ask a guiding question to help them think it through."
-        )
-    elif hints_given == 2:
-        # Hint 2: analogy
-        system = (
-            f"{_AGE_RULE} "
-            "You are a kind tutor. Give ONE simple analogy. "
-            "Use toys, food, animals, or home objects. "
-            "Do NOT give the answer directly."
-        )
-        prompt = (
-            f"Concept: {concept}. "
-            f"Student said: {state.get('student_input', '')}. "
-            "Give a simple analogy to help them understand."
-        )
-    else:
-        # Hint 3+: step-by-step breakdown
-        system = (
-            f"{_AGE_RULE} "
-            "You are a kind tutor. Break the problem into tiny steps. "
-            "Number each step. Use very simple words. "
-            "Do NOT give the final answer — stop just before it."
-        )
-        prompt = (
-            f"Concept: {concept}. "
-            f"Student said: {state.get('student_input', '')}. "
-            "Break it into small steps to guide them."
-        )
-
-    response = llm_call(system, prompt, state.get("session_history"))
-    if response is None:
-        response = "Hmm, something went wrong. Let's try again!"
-
-    history = list(state.get("session_history", []))
-    history.append({"role": "assistant", "content": response})
-
-    return {
-        "hints_given": hints_given + 1,
-        "current_response": response,
-        "session_history": history,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Node: check_understanding
-# ---------------------------------------------------------------------------
-
-_VALID_LEVELS = {
-    "got_it", "progressing", "stuck", "incorrect", "frustrated", "distressed"
-}
-
-
-def check_understanding(state: TutorState) -> dict:
-    system = (
-        "You are a tutor evaluating a student's response. "
-        "Classify the student's understanding using EXACTLY ONE word from this list: "
-        "got_it, progressing, stuck, incorrect, frustrated, distressed. "
-        "Rules: "
-        "'got_it' — student clearly understands. "
-        "'progressing' — student is getting closer but not there yet. "
-        "'stuck' — student is confused or not moving forward. "
-        "'incorrect' — student gave a factually wrong answer. "
-        "'frustrated' — student shows signs of annoyance or giving up. "
-        "'distressed' — student shows signs of significant upset or distress. "
-        "Reply with ONLY that single word. No punctuation. No explanation."
+    system_prompt = (
+        f'You are a Socratic tutor for a 6-year-old Grade 1 student working on: "{concept}".\n\n'
+        f'Strategies already tried: {strategies_tried_str}  (NEVER repeat these)\n\n'
+        f'Your job each turn:\n'
+        f'1. Read the conversation history and assess whether the student is converging on the answer or still stuck.\n'
+        f'2. Check for distress signals (crying, "I hate this", "I want to quit", "this is too hard", repeated frustration). '
+        f'If detected, output ONLY the word: ESCALATE\n'
+        f'3. If the student has clearly demonstrated they understand the answer, respond warmly confirming their understanding. '
+        f'Do not call any tool.\n'
+        f'4. If all five strategies have been tried (strategies_tried contains all of: guiding_question, analogy, '
+        f'concrete_example, sub_problem, number_line) AND the student has not demonstrated understanding: '
+        f'give the answer directly and warmly (e.g. "The answer is 23! Let me show you why."), '
+        f'ask one simpler confidence-rebuilding question, then output on a new line: REVIEW:{{concept}}\n'
+        f'5. Otherwise: choose the single best next strategy not already in strategies_tried, '
+        f'then call the scaffold_hint tool OR the calculator tool if arithmetic verification would help.\n\n'
+        f'{_AGE_RULE}'
     )
-    prompt = (
-        f"Concept being learned: {state.get('concept', '')}. "
-        f"Student's latest response: {state.get('student_input', '')}."
-    )
-    raw = llm_call(system, prompt, state.get("session_history"))
-    if raw is None:
-        level = "stuck"
-    else:
-        level = raw.strip().lower()
-        if level not in _VALID_LEVELS:
-            # Try to find a valid level in the response
-            for valid in _VALID_LEVELS:
-                if valid in level:
-                    level = valid
+
+    messages: list = [{"role": "system", "content": system_prompt}]
+    for msg in state.get("conversation_history", []):
+        messages.append(msg)
+    messages.append({"role": "user", "content": state["student_input"]})
+
+    new_strategies: list = []
+    final_response = ""
+    session_paused = False
+    concepts_needing_review: list = []
+
+    try:
+        while True:
+            response = _reasoning_llm.invoke(messages)
+
+            # Check for text signals BEFORE tool calls
+            if not response.tool_calls:
+                text = response.content.strip()
+
+                if text == "ESCALATE":
+                    session_paused = True
+                    final_response = ""  # escalate node writes the message
                     break
-            else:
-                level = "stuck"
 
-    history = list(state.get("session_history", []))
-    history.append({"role": "user", "content": state.get("student_input", "")})
+                # Check for REVIEW signal
+                if "REVIEW:" in text:
+                    parts = text.split("REVIEW:")
+                    final_response = parts[0].strip()
+                    reviewed_concept = parts[1].strip() if len(parts) > 1 else state.get("concept", "")
+                    concepts_needing_review = [reviewed_concept]
+                    break
 
-    incorrect_attempts = state.get("incorrect_attempts", 0)
-    if level == "incorrect":
-        incorrect_attempts += 1
-    elif level == "got_it":
-        incorrect_attempts = 0
+                # Normal response (understanding confirmed or hint delivered via text)
+                final_response = text
+                break
+
+            # Handle tool calls
+            messages.append(response)
+            for tc in response.tool_calls:
+                try:
+                    if tc["name"] == "scaffold_hint":
+                        # Pass current strategies_tried including newly added ones this turn
+                        args = dict(tc["args"])
+                        args["strategies_tried"] = strategies_tried + new_strategies
+                        result = scaffold_hint.invoke(args)
+                        if isinstance(result, dict):
+                            strategy = result.get("strategy", "")
+                            if strategy:
+                                new_strategies.append(strategy)
+                        result_str = result.get("hint", str(result)) if isinstance(result, dict) else str(result)
+                    elif tc["name"] == "calculator":
+                        result_str = calculator.invoke(tc["args"])
+                    else:
+                        result_str = ""
+                except ValueError as e:
+                    # scaffold_hint exhaustion — handle gracefully
+                    result_str = f"Error: {e}"
+
+                messages.append(ToolMessage(content=result_str, tool_call_id=tc["id"]))
+
+    except (openai.APIError, openai.RateLimitError) as e:
+        print(f"[API ERROR] {e}", file=sys.stderr)
+        return {"current_response": "Oops! Something went wrong. Let us try again!"}
 
     return {
-        "understanding_level": level,
-        "incorrect_attempts": incorrect_attempts,
-        "session_history": history,
+        "current_response": final_response,
+        "session_paused": session_paused,
+        "strategies_tried": new_strategies,
+        "concepts_needing_review": concepts_needing_review,
+        "conversation_history": [
+            {"role": "user", "content": state["student_input"]},
+            {"role": "assistant", "content": final_response},
+        ],
     }
 
 
 # ---------------------------------------------------------------------------
-# Node: encourage
+# Node 4: format_response
 # ---------------------------------------------------------------------------
 
-def encourage(state: TutorState) -> dict:
-    system = (
+def format_response(state: TutorState) -> dict:
+    """Post-process current_response for Grade 1 audience."""
+    system_prompt = (
+        f"Rewrite the following response for a 6-year-old Grade 1 student. "
         f"{_AGE_RULE} "
-        "You are a warm, kind tutor. The student is feeling frustrated. "
-        "Write 2–3 short encouraging sentences. "
-        "Reframe the problem as fun. Do NOT give the answer. "
-        "End with one gentle prompt to try again."
+        f"Preserve the exact meaning. Do not add new information. "
+        f"Do not remove any questions asked. Return only the rewritten response."
     )
-    prompt = (
-        f"Concept: {state.get('concept', '')}. "
-        f"Student said: {state.get('student_input', '')}."
-    )
-    response = llm_call(system, prompt, state.get("session_history"))
-    if response is None:
-        response = "You're doing great! Let's try again together."
+    try:
+        response = _format_llm.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": state["current_response"]},
+        ])
+        formatted_response = response.content.strip()
+    except (openai.APIError, openai.RateLimitError) as e:
+        print(f"[API ERROR] {e}", file=sys.stderr)
+        # Fall back to original on failure
+        return {"current_response": state["current_response"]}
+    except Exception:
+        # Any other failure — return original unchanged
+        return {"current_response": state["current_response"]}
 
-    history = list(state.get("session_history", []))
-    history.append({"role": "assistant", "content": response})
-
-    return {
-        "current_response": response,
-        "session_history": history,
-    }
+    return {"current_response": formatted_response}
 
 
 # ---------------------------------------------------------------------------
-# Node: reinforce_concept
-# ---------------------------------------------------------------------------
-
-def reinforce_concept(state: TutorState) -> dict:
-    system = (
-        f"{_AGE_RULE} "
-        "You are a kind tutor. The student just understood the concept. "
-        "First, celebrate warmly in ONE short sentence. "
-        "Then, ask ONE slightly harder question about the same idea. "
-        "Do NOT give the answer to the new question."
-    )
-    prompt = (
-        f"Concept mastered: {state.get('concept', '')}. "
-        "Celebrate and ask a slightly harder follow-up question."
-    )
-    response = llm_call(system, prompt, state.get("session_history"))
-    if response is None:
-        response = "Amazing work! You got it! Try this: can you think of another example?"
-
-    history = list(state.get("session_history", []))
-    history.append({"role": "assistant", "content": response})
-
-    return {
-        "current_response": response,
-        "session_history": history,
-        "session_complete": True,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Node: escalate
+# Node 5: escalate
 # ---------------------------------------------------------------------------
 
 def escalate(state: TutorState) -> dict:
-    response = (
-        "It's okay. You are safe. "
+    """Handle distress — pause session with a warm, safe message."""
+    message = (
+        "It is okay to feel that way. You are safe. "
         "Please talk to a grown-up you trust. "
-        "We can come back to this later. "
-        "You are doing really well."
+        "You are doing really great. "
+        "We can come back anytime you are ready."
     )
-    history = list(state.get("session_history", []))
-    history.append({"role": "assistant", "content": response})
-
     return {
-        "current_response": response,
+        "current_response": message,
         "session_paused": True,
-        "session_history": history,
     }
 
 
 # ---------------------------------------------------------------------------
-# Node: resume_session
+# Node 6: resume_session
 # ---------------------------------------------------------------------------
 
 def resume_session(state: TutorState) -> dict:
-    concept = state.get("concept", "what we were learning")
-    system = (
-        f"{_AGE_RULE} "
-        "You are a warm tutor. The student is coming back after a break. "
-        "Welcome them back in ONE short warm sentence. "
-        "Remind them what they were learning in ONE short sentence. "
-        "Tell them you will help them again."
-    )
-    prompt = f"The student was learning: {concept}. Welcome them back."
-    response = llm_call(system, prompt)
-    if response is None:
-        response = f"Welcome back! We were learning about {concept}. Let's continue!"
-
-    history = list(state.get("session_history", []))
-    history.append({"role": "assistant", "content": response})
+    """Welcome student back after a pause."""
+    concept = state.get("concept", "what we were working on")
+    try:
+        system_prompt = (
+            f"{_AGE_RULE} "
+            f"You are a warm tutor. The student is coming back after a break. "
+            f"Welcome them back in one short warm sentence. "
+            f"Remind them what they were working on. "
+            f"Tell them you are happy to help again."
+        )
+        response = _format_llm.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"The student was working on: {concept}. Welcome them back."},
+        ])
+        message = response.content.strip()
+    except (openai.APIError, openai.RateLimitError) as e:
+        print(f"[API ERROR] {e}", file=sys.stderr)
+        message = f"Welcome back! We were working on {concept}. Let us keep going!"
 
     return {
+        "current_response": message,
         "session_paused": False,
-        "current_response": response,
-        "session_history": history,
     }
