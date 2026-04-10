@@ -1,25 +1,27 @@
 # Personal AI Tutoring Assistant
 
-A conversational tutoring agent built with LangGraph and the OpenAI API. It guides students aged 5–6 through problems using Socratic questioning rather than giving direct answers.
+An AI tutor for Grade 1 students (age 6) built with LangGraph and the OpenAI API. It handles two types of questions with separate ReAct loops: factual questions answered via web search, and reasoning questions guided through adaptive Socratic scaffolding. Phoenix observability is built in.
 
 ## Features
 
-- **Socratic hint progression** — guiding question → analogy → step-by-step breakdown
-- **6-way understanding classifier** — routes based on `got_it`, `progressing`, `stuck`, `incorrect`, `frustrated`, or `distressed`
-- **Pause-and-resume** — sessions pause gracefully on distress and can be resumed later by thread ID
-- **Stateful sessions** — full conversation history maintained via LangGraph `MemorySaver`
+- **Dual ReAct loops** — factual questions use web search (Tavily); reasoning questions use adaptive Socratic scaffolding
+- **5-strategy scaffolding** — guiding question, analogy, concrete example, sub-problem, number line; strategies are never repeated within a session
+- **Strategy exhaustion** — if all 5 strategies are tried without a breakthrough, the tutor gives a direct answer warmly and flags the concept for adult review
+- **Distress detection** — session pauses gracefully and preserves state; resume any time with `--resume`
+- **Session review** — prints `concepts_needing_review` at session end for parent/teacher follow-up
+- **Phoenix observability** — every CLI turn is traced; tool calls appear as child spans
 
 ## Setup
 
-### 1. Clone and create a virtual environment
+### Requirements
 
-> **Python version:** Use Python 3.11 or 3.12. Python 3.14+ is not supported — `langchain-core` relies on Pydantic V1 compatibility which breaks on 3.14, causing silent API failures.
+Python 3.11 or 3.12 required. Python 3.14+ is not supported.
 
 ```bash
 git clone <repo-url>
 cd ai-tutor
 
-# Windows (use py launcher to target the correct version)
+# Windows
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
@@ -28,28 +30,21 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 2. Install dependencies
+### Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Set your OpenAI API key
+### Environment variables
 
-Get your API key from platform.openai.com → API Keys, then add it to a `.env` file in the project root:
+Create a `.env` file in the project root:
 
 ```
-OPENAI_API_KEY=sk-proj-...
-```
-
-Or export it in your shell:
-
-```bash
-# Windows (PowerShell)
-$env:OPENAI_API_KEY = "sk-proj-..."
-
-# macOS / Linux
-export OPENAI_API_KEY="sk-proj-..."
+OPENAI_API_KEY=sk-...
+TAVILY_API_KEY=tvly-...
+PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
+PHOENIX_PROJECT_NAME=ai-tutor
 ```
 
 ## Usage
@@ -60,67 +55,89 @@ export OPENAI_API_KEY="sk-proj-..."
 python -m tutor.cli
 ```
 
-```
-=== New session started ===
-Session ID: 3f2a1c9e-...
-(Save this ID to resume later with --resume <SESSION_ID>)
-
-Hi! I'm your tutor. What would you like to learn today?
-
-You: why is the sky blue?
-
-Tutor: What colour do you see when you look up outside?
-```
-
 ### Resume a paused session
 
 If a session was paused (e.g. the student appeared distressed), resume it with:
 
 ```bash
-python -m tutor.cli --resume 3f2a1c9e-...
+python -m tutor.cli --resume <thread_id>
 ```
+
+The thread ID is printed when a session starts. Save it to resume later.
 
 ### Exit
 
-Type `quit` or press `Ctrl+C` at any time.
+Type `quit`, `exit`, or `q` at any prompt.
 
-## Running Tests
+## Architecture
+
+The assistant is a LangGraph `StateGraph` compiled with a `MemorySaver` checkpointer. Each CLI turn is one `invoke()` call.
+
+| Node | Purpose |
+|---|---|
+| `classify_question` | Binary factual/reasoning classification + concept extraction |
+| `factual_react_loop` | ReAct loop with `web_search` tool |
+| `reasoning_react_loop` | ReAct loop with `calculator` + `scaffold_hint` tools |
+| `format_response` | Grade 1 language post-processing applied to both loop outputs |
+| `escalate` | Distress handler — sets `session_paused=True` |
+| `resume_session` | Welcome back message after pause; clears `session_paused` |
+
+Graph flow:
+
+```
+START
+  │
+  ├─ (session_paused)  → resume_session → END
+  └─ (otherwise)       → classify_question
+                              │
+                              ├─ factual   → factual_react_loop → format_response → END
+                              └─ reasoning → reasoning_react_loop
+                                                  │
+                                                  ├─ (distressed) → escalate → END
+                                                  └─ (otherwise)  → format_response → END
+```
+
+## Observability (Phoenix)
+
+Install and start Phoenix:
+
+```bash
+pip install arize-phoenix
+phoenix serve
+```
+
+Open `http://localhost:6006` to view traces.
+
+Each CLI turn creates a trace. Tool calls (`web_search`, `calculator`, `scaffold_hint`) appear as child spans within the loop spans, enabling step-by-step inspection of the ReAct reasoning.
+
+## Tests
+
+Run all unit and structural tests (no API keys needed):
 
 ```bash
 pytest tests/
 ```
 
-All tests are unit tests with no LLM calls required.
+Run LLM-as-judge evals (requires `OPENAI_API_KEY`):
+
+```bash
+python tests/evals/run_llm_evals.py
+```
 
 ## Project Structure
 
 ```
 tutor/
-  state.py        # TutorState TypedDict
-  nodes.py        # 7 node functions + llm_call() helper
-  graph.py        # StateGraph, routing logic, compiled tutor_app
-  cli.py          # Interactive CLI with --resume support
+  state.py              # TutorState TypedDict
+  nodes.py              # Node functions and ReAct loops
+  graph.py              # StateGraph, routing logic, compiled tutor_app
+  cli.py                # Interactive CLI with --resume support
+  instrumentation.py    # Phoenix tracing setup
 tests/
-  test_routing.py # Routing logic tests for all 6 understanding states
+  test_tools.py         # Unit tests for tools and nodes
+  conftest.py           # Shared fixtures
+  evals/
+    run_llm_evals.py    # LLM-as-judge evaluation suite
 requirements.txt
 README.md
-```
-
-## Architecture
-
-The assistant is a LangGraph `StateGraph` compiled with a `MemorySaver` checkpointer:
-
-```
-START
-  │
-  ├─ (no concept yet)   → assess_question → scaffold_hint → END
-  ├─ (session paused)   → resume_session  → scaffold_hint → END
-  └─ (concept known)    → check_understanding
-                              │
-                              ├─ got_it      → reinforce_concept → END
-                              ├─ progressing → scaffold_hint → END
-                              ├─ stuck       → scaffold_hint → END
-                              ├─ incorrect   → scaffold_hint → END  (gentle correction if > 2 attempts)
-                              ├─ frustrated  → encourage → scaffold_hint → END
-                              └─ distressed  → escalate → END  (session_paused=True)
 ```
