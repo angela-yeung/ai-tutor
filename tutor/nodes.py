@@ -160,7 +160,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
             if not response.tool_calls:
                 text = response.content.strip()
 
-                if text == "ESCALATE":
+                if text.rstrip(".! \n") == "ESCALATE":
                     session_paused = True
                     final_response = ""  # escalate node writes the message
                     break
