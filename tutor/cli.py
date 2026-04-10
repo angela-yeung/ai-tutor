@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from tutor.graph import tutor
+from tutor.instrumentation import setup_tracing, get_tracer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,18 +36,20 @@ def _print_concepts_needing_review(concepts: list) -> None:
 
 
 def run() -> None:
+    setup_tracing()
+    tracer = get_tracer()
     args = build_parser().parse_args()
 
     if args.resume:
         thread_id = args.resume
         print(f"\n=== Resuming session {thread_id} ===\n")
-        initial_input: dict = {"student_input": "I'm back, let's continue."}
+        is_resume = True
     else:
         thread_id = str(uuid4())
         print(f"\n=== New session started ===")
         print(f"Session ID: {thread_id}")
         print("(Save this ID to resume later with --resume <SESSION_ID>)\n")
-        initial_input = None
+        is_resume = False
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -54,9 +57,10 @@ def run() -> None:
     print("(Type 'quit' to exit)\n")
 
     # On resume, fire off the resume node before the main loop
-    if args.resume:
+    if is_resume:
         try:
-            result = tutor.invoke(initial_input, config=config)
+            with tracer.start_as_current_span("cli_turn"):
+                result = tutor.invoke({"student_input": "I'm back, let's continue."}, config=config)
             _print_response(result)
             if result.get("session_paused"):
                 print(f"\nSession paused. Your session ID is: {thread_id}")
@@ -88,11 +92,19 @@ def run() -> None:
         if not user_input:
             continue
 
+        # Build state update — seed list fields on first turn of new sessions
+        state_update: dict = {"student_input": user_input}
+        if not is_resume and not tutor.get_state(config).values:
+            state_update.update({
+                "strategies_tried": [],
+                "concepts_needing_review": [],
+                "conversation_history": [],
+                "session_paused": False,
+            })
+
         try:
-            result = tutor.invoke(
-                {"student_input": user_input},
-                config=config,
-            )
+            with tracer.start_as_current_span("cli_turn"):
+                result = tutor.invoke(state_update, config=config)
         except Exception:
             print(
                 "\nTutor: Hmm, something went wrong. Let's try again!\n"
