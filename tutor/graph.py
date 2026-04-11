@@ -6,7 +6,6 @@ from tutor.nodes import (
     classify_question,
     factual_react_loop,
     reasoning_react_loop,
-    format_response,
     escalate,
     resume_session,
 )
@@ -31,7 +30,7 @@ def route_after_classify(state: TutorState) -> str:
 def route_after_reasoning(state: TutorState) -> str:
     if state.get("session_paused"):
         return "escalate"
-    return "format_response"
+    return END
 
 
 # ---------------------------------------------------------------------------
@@ -43,16 +42,14 @@ builder = StateGraph(TutorState)
 builder.add_node("classify_question", classify_question)
 builder.add_node("factual_react_loop", factual_react_loop)
 builder.add_node("reasoning_react_loop", reasoning_react_loop)
-builder.add_node("format_response", format_response)
 builder.add_node("escalate", escalate)
 builder.add_node("resume_session", resume_session)
 
 builder.add_conditional_edges(START, entry_router)
 builder.add_conditional_edges("classify_question", route_after_classify)
 builder.add_conditional_edges("reasoning_react_loop", route_after_reasoning)
-builder.add_edge("resume_session", END)        # shows welcome; next turn re-enters classify_question
-builder.add_edge("factual_react_loop", "format_response")
-builder.add_edge("format_response", END)
+builder.add_edge("resume_session", END)
+builder.add_edge("factual_react_loop", END)
 builder.add_edge("escalate", END)
 
 memory = MemorySaver()

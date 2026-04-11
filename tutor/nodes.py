@@ -236,39 +236,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Node 4: format_response
-# ---------------------------------------------------------------------------
-
-def format_response(state: TutorState) -> dict:
-    """Post-process current_response for Grade 1 audience."""
-    system_prompt = (
-        f'{_date_context()}'
-        f"Rewrite the following response for a 6-year-old Grade 1 student. "
-        f"{_AGE_RULE} "
-        f"CRITICAL: Copy all proper nouns (names of people, places, titles) EXACTLY as written. "
-        f"Do NOT substitute, replace, or omit any name or specific fact. "
-        f"Preserve the exact meaning. Do not add new information. "
-        f"Do not remove any questions asked. Return only the rewritten response."
-    )
-    try:
-        response = _format_llm.invoke([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": state["current_response"]},
-        ])
-        formatted_response = response.content.strip()
-    except (openai.APIError, openai.RateLimitError) as e:
-        print(f"[API ERROR] {e}", file=sys.stderr)
-        # Fall back to original on failure
-        return {"current_response": state["current_response"]}
-    except Exception:
-        # Any other failure — return original unchanged
-        return {"current_response": state["current_response"]}
-
-    return {"current_response": formatted_response}
-
-
-# ---------------------------------------------------------------------------
-# Node 5: escalate
+# Node 4: escalate
 # ---------------------------------------------------------------------------
 
 def escalate(state: TutorState) -> dict:

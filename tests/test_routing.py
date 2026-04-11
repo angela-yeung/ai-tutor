@@ -4,6 +4,7 @@ All routing functions are pure (no LLM calls), so no mocking is needed.
 """
 
 import pytest
+from langgraph.graph import END
 from tutor.graph import entry_router, route_after_classify, route_after_reasoning
 
 
@@ -72,14 +73,14 @@ def test_route_after_reasoning_paused_goes_to_escalate():
     assert route_after_reasoning({"session_paused": True}) == "escalate"
 
 
-def test_route_after_reasoning_normal_goes_to_format():
-    assert route_after_reasoning({"session_paused": False}) == "format_response"
+def test_route_after_reasoning_normal_goes_to_end():
+    assert route_after_reasoning({"session_paused": False}) == END
 
 
-def test_route_after_reasoning_no_paused_key_goes_to_format():
-    assert route_after_reasoning({}) == "format_response"
+def test_route_after_reasoning_no_paused_key_goes_to_end():
+    assert route_after_reasoning({}) == END
 
 
-def test_route_after_reasoning_paused_false_goes_to_format():
-    """Explicit False routes to format_response."""
-    assert route_after_reasoning({"session_paused": False}) == "format_response"
+def test_route_after_reasoning_paused_false_goes_to_end():
+    """Explicit False routes to END."""
+    assert route_after_reasoning({"session_paused": False}) == END
