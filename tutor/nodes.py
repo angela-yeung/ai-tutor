@@ -1,3 +1,4 @@
+import datetime
 import sys
 
 import openai
@@ -14,11 +15,15 @@ from tutor.tools import calculator, web_search, scaffold_hint
 _classifier_llm = ChatOpenAI(model="gpt-4o", temperature=0)
 _factual_llm = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools([web_search])
 _reasoning_llm = ChatOpenAI(model="gpt-4o", temperature=0.7).bind_tools([calculator, scaffold_hint])
-_format_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+_format_llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 # ---------------------------------------------------------------------------
 # Age rule
 # ---------------------------------------------------------------------------
+
+def _date_context() -> str:
+    return f'Today is {datetime.date.today().strftime("%B %d, %Y")}. '
+
 
 _AGE_RULE = (
     "ALWAYS use sentences of 10 words or fewer. "
@@ -35,10 +40,15 @@ _AGE_RULE = (
 def classify_question(state: TutorState) -> dict:
     """Binary classify student input as factual or reasoning, extract concept."""
     system_prompt = (
+        f'{_date_context()}'
         "Classify the student's question. "
         "Output EXACTLY in this format: <type>|<concept> "
         "where type is 'factual' or 'reasoning', and concept is the key topic in 3 words or fewer. "
-        "Examples: factual|capital of France, reasoning|addition to 20, factual|spider legs. "
+        "'factual' = a fixed fact that can be looked up (capital cities, animal facts, historical events, definitions). "
+        "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
+        "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
+        "Examples: factual|capital of France, reasoning|simple addition, factual|spider legs, "
+        "reasoning|7 plus 4, reasoning|word problem subtraction. "
         "Only output the format, nothing else."
     )
     try:
@@ -71,6 +81,7 @@ def factual_react_loop(state: TutorState) -> dict:
     """ReAct loop for factual questions using web_search."""
     concept = state.get("concept", "your question")
     system_prompt = (
+        f'{_date_context()}'
         f'You are a friendly tutor for a 6-year-old. '
         f'The student asked a factual question about "{concept}". '
         f'First, reason about whether you need to search for the answer. '
@@ -84,6 +95,7 @@ def factual_react_loop(state: TutorState) -> dict:
         messages.append(msg)
     messages.append({"role": "user", "content": state["student_input"]})
 
+    tools_called: list[str] = []  # eval only — discarded by LangGraph state
     try:
         response = None
         while True:
@@ -94,6 +106,7 @@ def factual_react_loop(state: TutorState) -> dict:
             messages.append(response)
             # Execute each tool call
             for tc in response.tool_calls:
+                tools_called.append(tc["name"])
                 if tc["name"] == "web_search":
                     result = web_search.invoke(tc["args"])
                 else:
@@ -111,6 +124,7 @@ def factual_react_loop(state: TutorState) -> dict:
             {"role": "user", "content": state["student_input"]},
             {"role": "assistant", "content": final_response},
         ],
+        "tools_called": tools_called,
     }
 
 
@@ -125,6 +139,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
     strategies_tried_str = ", ".join(strategies_tried) if strategies_tried else "none yet"
 
     system_prompt = (
+        f'{_date_context()}'
         f'You are a Socratic tutor for a 6-year-old Grade 1 student working on: "{concept}".\n\n'
         f'Strategies already tried: {strategies_tried_str}  (NEVER repeat these)\n\n'
         f'Your job each turn:\n'
@@ -151,6 +166,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
     final_response = ""
     session_paused = False
     concepts_needing_review: list = []
+    tools_called: list[str] = []  # eval only — discarded by LangGraph state
 
     try:
         while True:
@@ -180,6 +196,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
             # Handle tool calls
             messages.append(response)
             for tc in response.tool_calls:
+                tools_called.append(tc["name"])
                 try:
                     if tc["name"] == "scaffold_hint":
                         # Pass current strategies_tried including newly added ones this turn
@@ -214,6 +231,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
             {"role": "user", "content": state["student_input"]},
             {"role": "assistant", "content": final_response},
         ],
+        "tools_called": tools_called,
     }
 
 
@@ -224,8 +242,11 @@ def reasoning_react_loop(state: TutorState) -> dict:
 def format_response(state: TutorState) -> dict:
     """Post-process current_response for Grade 1 audience."""
     system_prompt = (
+        f'{_date_context()}'
         f"Rewrite the following response for a 6-year-old Grade 1 student. "
         f"{_AGE_RULE} "
+        f"CRITICAL: Copy all proper nouns (names of people, places, titles) EXACTLY as written. "
+        f"Do NOT substitute, replace, or omit any name or specific fact. "
         f"Preserve the exact meaning. Do not add new information. "
         f"Do not remove any questions asked. Return only the rewritten response."
     )
@@ -273,6 +294,7 @@ def resume_session(state: TutorState) -> dict:
     concept = state.get("concept", "what we were working on")
     try:
         system_prompt = (
+            f'{_date_context()}'
             f"{_AGE_RULE} "
             f"You are a warm tutor. The student is coming back after a break. "
             f"Welcome them back in one short warm sentence. "

@@ -133,6 +133,12 @@ def test_age_rule_constant_defined():
     assert "10 words" in nodes._AGE_RULE
 
 
+def test_classify_prompt_arithmetic_is_reasoning():
+    """Classifier prompt must explicitly state arithmetic is always reasoning."""
+    source = inspect.getsource(nodes.classify_question)
+    assert "arithmetic" in source.lower() or "calculation" in source.lower()
+
+
 # ---------------------------------------------------------------------------
 # Section 5: Node output shape tests (mocked)
 # ---------------------------------------------------------------------------
@@ -239,3 +245,10 @@ def test_format_response_returns_current_response_key():
         )
     assert "current_response" in result
     assert result["current_response"] != ""
+
+
+def test_format_response_prompt_preserves_proper_nouns_constraint():
+    """Prompt must instruct the LLM not to substitute proper nouns with its training data."""
+    source = inspect.getsource(nodes.format_response)
+    assert "proper noun" in source.lower() or "names" in source.lower()
+    assert "not" in source.lower() or "do not" in source.lower()
