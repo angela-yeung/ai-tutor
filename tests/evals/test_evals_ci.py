@@ -15,6 +15,7 @@ from typing import get_type_hints
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langgraph.graph import END
 
 from tutor.graph import entry_router, route_after_classify, route_after_reasoning
 from tutor.state import TutorState
@@ -38,7 +39,7 @@ ROUTING_CASES = [
     ("factual_route",   {"question_type": "factual"},   "route_after_classify", "factual_react_loop"),
     ("reasoning_route", {"question_type": "reasoning"}, "route_after_classify", "reasoning_react_loop"),
     ("escalate_route",  {"session_paused": True},   "route_after_reasoning",  "escalate"),
-    ("format_route",    {"session_paused": False},  "route_after_reasoning",  "format_response"),
+    ("reasoning_done",  {"session_paused": False},  "route_after_reasoning",  END),
 ]
 
 
@@ -120,11 +121,6 @@ def test_age_rule_in_factual_loop():
 
 def test_age_rule_in_reasoning_loop():
     source = inspect.getsource(nodes.reasoning_react_loop)
-    assert "_AGE_RULE" in source
-
-
-def test_age_rule_in_format_response():
-    source = inspect.getsource(nodes.format_response)
     assert "_AGE_RULE" in source
 
 
@@ -230,25 +226,3 @@ def test_resume_session_returns_response():
     assert result["current_response"] != ""
 
 
-def test_format_response_returns_current_response_key():
-    with patch("tutor.nodes._format_llm") as mock_llm:
-        mock_llm.invoke.return_value = MagicMock(
-            content="7 plus 8 is 15!", tool_calls=[]
-        )
-        result = nodes.format_response(
-            _full_state(
-                current_response=(
-                    "The mathematical operation of addition requires combining "
-                    "two numerical values to produce a sum."
-                )
-            )
-        )
-    assert "current_response" in result
-    assert result["current_response"] != ""
-
-
-def test_format_response_prompt_preserves_proper_nouns_constraint():
-    """Prompt must instruct the LLM not to substitute proper nouns with its training data."""
-    source = inspect.getsource(nodes.format_response)
-    assert "proper noun" in source.lower() or "names" in source.lower()
-    assert "not" in source.lower() or "do not" in source.lower()

@@ -118,22 +118,6 @@
     "expected_fields": {"session_paused": false}
   },
   {
-    "id": "format_response_grade1",
-    "description": "format_response rewrites complex sentences to Grade 1 level",
-    "input_state": {
-      "student_input": "",
-      "concept": "addition",
-      "question_type": "reasoning",
-      "strategies_tried": [],
-      "conversation_history": [],
-      "current_response": "The mathematical operation of addition requires combining two numerical values to produce a sum, which in this case results in the integer fifteen.",
-      "session_paused": false,
-      "concepts_needing_review": []
-    },
-    "expected_node": "format_response",
-    "expected_fields": {}
-  },
-  {
     "id": "calculator_use",
     "description": "Arithmetic verification with calculator tool in reasoning loop",
     "input_state": {
