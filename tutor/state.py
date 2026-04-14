@@ -11,3 +11,4 @@ class TutorState(TypedDict):
     current_response: str                                  # latest assistant response
     session_paused: bool                                   # True when escalate is triggered
     concepts_needing_review: Annotated[list, operator.add] # concepts flagged for adult follow-up
+    input_blocked: bool                                    # set True by input_guard on block
