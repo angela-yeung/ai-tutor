@@ -133,16 +133,14 @@ def test_check_input_injection_blocked_before_api():
 
 
 def test_check_input_off_topic_blocked():
-    """NLI classifier flags off-topic input at or above threshold."""
-    mock_client = MagicMock()
-    mock_client.moderations.create.return_value = _make_moderation_response(False)
-
+    """NLI classifier flags off-topic input; moderation API is never reached."""
     clf_response = _make_classifier_response("a message unrelated to school or learning", 0.92)
 
-    with patch("tutor.guardrails._get_openai", return_value=mock_client), \
+    with patch("tutor.guardrails._get_openai") as mock_openai, \
          patch("tutor.guardrails._get_classifier", return_value=lambda text, labels: clf_response):
         result = check_input("what did you eat for breakfast")
 
+    mock_openai.assert_not_called()
     assert result.blocked is True
     assert result.message != ""
 
