@@ -32,7 +32,7 @@ _INJECTION_PATTERNS = [
     r"system\s+override",
     r"reveal\s+(your\s+)?prompt",
     r"forget\s+(all\s+)?instructions",
-    r"act\s+as",
+    r"\bact\s+as\b",
     r"pretend\s+(you\s+are|to\s+be)",
     r"jailbreak",
 ]
@@ -107,8 +107,11 @@ def _fuzzy_matches_injection(word: str) -> bool:
 
     Matches when: same length, same first letter, same last letter, middle
     characters are an anagram of the target's middle characters.
+    Exact matches are excluded — they are already caught by _INJECTION_PATTERNS.
     """
     for target in _FUZZY_TARGETS:
+        if word == target:  # exact match handled by pattern list
+            continue
         if (
             len(word) == len(target)
             and word[0] == target[0]
@@ -124,6 +127,7 @@ def sanitise_input(text: str) -> str:
     """Normalise text and detect injection attempts.
 
     Returns cleaned text on success. Raises ValueError on injection detection.
+    Length cap (_MAX_INPUT_LENGTH) is enforced in check_input, not here.
     """
     # 1. Unicode NFKC normalisation — defeats homoglyph attacks
     text = unicodedata.normalize("NFKC", text)
@@ -132,8 +136,9 @@ def sanitise_input(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"(.)\1{4,}", r"\1\1", text)
 
-    # 3. Base64 payload detection
-    if re.search(r"[A-Za-z0-9+/]{20,}={0,2}", text):
+    # 3. Base64 payload detection — requires both letters and digits to avoid blocking long numbers
+    m = re.search(r"[A-Za-z0-9+/]{20,}={0,2}", text)
+    if m and re.search(r"[A-Za-z]", m.group()) and re.search(r"[0-9]", m.group()):
         raise ValueError("encoded_content")
 
     # 4. Hex escape sequence detection
