@@ -15,8 +15,6 @@ from typing import get_type_hints
 from unittest.mock import MagicMock, patch
 
 import pytest
-from langgraph.graph import END
-
 from tutor.graph import entry_router, route_after_classify, route_after_reasoning
 from tutor.state import TutorState
 from tutor import nodes
@@ -39,7 +37,7 @@ ROUTING_CASES = [
     ("factual_route",   {"question_type": "factual"},   "route_after_classify", "factual_react_loop"),
     ("reasoning_route", {"question_type": "reasoning"}, "route_after_classify", "reasoning_react_loop"),
     ("escalate_route",  {"session_paused": True},   "route_after_reasoning",  "escalate"),
-    ("reasoning_done",  {"session_paused": False},  "route_after_reasoning",  END),
+    ("reasoning_done",  {"session_paused": False},  "route_after_reasoning",  "output_guard"),
 ]
 
 

@@ -4,8 +4,12 @@ All routing functions are pure (no LLM calls), so no mocking is needed.
 """
 
 import pytest
-from langgraph.graph import END
-from tutor.graph import entry_router, route_after_classify, route_after_reasoning
+from tutor.graph import (
+    entry_router,
+    route_after_classify,
+    route_after_reasoning,
+    route_after_input_guard,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -73,14 +77,30 @@ def test_route_after_reasoning_paused_goes_to_escalate():
     assert route_after_reasoning({"session_paused": True}) == "escalate"
 
 
-def test_route_after_reasoning_normal_goes_to_end():
-    assert route_after_reasoning({"session_paused": False}) == END
+def test_route_after_reasoning_normal_goes_to_output_guard():
+    assert route_after_reasoning({"session_paused": False}) == "output_guard"
 
 
-def test_route_after_reasoning_no_paused_key_goes_to_end():
-    assert route_after_reasoning({}) == END
+def test_route_after_reasoning_no_paused_key_goes_to_output_guard():
+    assert route_after_reasoning({}) == "output_guard"
 
 
-def test_route_after_reasoning_paused_false_goes_to_end():
-    """Explicit False routes to END."""
-    assert route_after_reasoning({"session_paused": False}) == END
+def test_route_after_reasoning_paused_false_goes_to_output_guard():
+    """Explicit False routes to output_guard."""
+    assert route_after_reasoning({"session_paused": False}) == "output_guard"
+
+
+# ---------------------------------------------------------------------------
+# route_after_input_guard
+# ---------------------------------------------------------------------------
+
+def test_route_after_input_guard_blocked():
+    assert route_after_input_guard({"input_blocked": True}) == "output_guard"
+
+
+def test_route_after_input_guard_clean():
+    assert route_after_input_guard({"input_blocked": False}) == "entry_router"
+
+
+def test_route_after_input_guard_missing_key_goes_to_entry_router():
+    assert route_after_input_guard({}) == "entry_router"
