@@ -118,10 +118,10 @@ Run all unit and structural tests (no API keys needed):
 pytest tests/
 ```
 
-Run LLM-as-judge evals (requires `OPENAI_API_KEY`):
+Run Phoenix experiment evals (requires `OPENAI_API_KEY` and `phoenix serve` running):
 
 ```bash
-python tests/evals/run_llm_evals.py
+python tests/evals/run_phoenix_evals.py
 ```
 
 ## Project Structure
@@ -137,7 +137,7 @@ tests/
   test_tools.py         # Unit tests for tools and nodes
   conftest.py           # Shared fixtures
   evals/
-    run_llm_evals.py    # LLM-as-judge evaluation suite
+    run_phoenix_evals.py  # Phoenix experiment eval suite (8 evaluators, 5 nodes)
 requirements.txt
 README.md
 ```

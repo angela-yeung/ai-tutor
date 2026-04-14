@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Overview
+
+This project is a LangGraph-based AI tutor application using Python. The main frameworks are LangGraph for agent orchestration and OpenAI for LLM calls. Always consider LangGraph state management patterns when making architectural suggestions.
+
 ## Commands
 
 ```bash
@@ -20,8 +24,8 @@ python -m tutor.cli
 # Resume a paused session
 python -m tutor.cli --resume <thread_id>
 
-# Run LLM-as-judge evals (requires OPENAI_API_KEY)
-python tests/evals/run_llm_evals.py
+# Run Phoenix experiment evals (requires OPENAI_API_KEY and `phoenix serve` running)
+python tests/evals/run_phoenix_evals.py
 ```
 
 Requires `OPENAI_API_KEY` env var. All LLM calls use `gpt-4o`. `TAVILY_API_KEY` required for web search in factual loop.
@@ -65,6 +69,26 @@ Defined in `tutor/state.py` as a `TypedDict`. Key fields:
 - `current_response` — latest assistant response
 - `session_paused` — set `True` by `reasoning_react_loop` on distress; cleared by `resume_session`
 - `concepts_needing_review` — `Annotated[list, operator.add]`; populated on strategy exhaustion; printed at session end
+
+## Testing
+
+Always run the full test suite (`pytest`) after making code changes. Ensure all tests pass before considering a task complete.
+
+## Code Conventions
+
+Use lazy initialization for LLM clients (e.g., ChatOpenAI) — never instantiate at module level. This prevents tests from requiring API keys at import time.
+
+## Workflow Preferences
+
+When the user presents multiple implementation options (e.g., Option A vs Option B), ask which they prefer before starting implementation. Do not assume based on existing test expectations.
+
+Before making changes to any feature area, explain how the current LangGraph state flows through the graph for that area — show the relevant nodes and edges. Do NOT make any code changes yet; wait for the user to confirm they understand.
+
+Before making any changes, run the existing test suite and show which tests pass/fail. Then propose your changes and predict which tests will be affected.
+
+## Debugging Guidelines
+
+When debugging, check the actual root cause (API credits, network connectivity, Python version) before assuming config file format issues.
 
 ## Prompt constraints
 

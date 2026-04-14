@@ -1,5 +1,18 @@
 {
   "enabledPlugins": {
     "supabase@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"/c/Users/Sheldon PC/OneDrive/ai-tutor/ai-tutor\" && python -m pytest --tb=short -q 2>&1 | tail -5"
+          }
+        ]
+      }
+    ]
   }
 }
