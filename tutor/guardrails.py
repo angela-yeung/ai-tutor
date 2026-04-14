@@ -164,7 +164,34 @@ def sanitise_input(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def check_input(text: str) -> GuardrailResult:
-    raise NotImplementedError
+    """Run all input guardrails in cheapest-first order.
+
+    Returns GuardrailResult(blocked=False) if all checks pass.
+    Returns GuardrailResult(blocked=True, message=...) on first failure.
+    """
+    # 1. Length cap (raw input, pure Python, no API cost)
+    if len(text) > _MAX_INPUT_LENGTH:
+        return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
+
+    # 2. Sanitise — catches injection attempts before any API call
+    try:
+        text = sanitise_input(text)
+    except ValueError:
+        return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
+
+    # 3. NLI topic scope (local model, no API cost)
+    clf_result = _get_classifier()(text, _EDUCATIONAL_LABELS)
+    top_label = clf_result["labels"][0]
+    top_score = clf_result["scores"][0]
+    if top_label == _EDUCATIONAL_LABELS[1] and top_score >= _OFF_TOPIC_THRESHOLD:
+        return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
+
+    # 4. OpenAI Moderation API
+    moderation = _get_openai().moderations.create(input=text)
+    if moderation.results[0].flagged:
+        return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
+
+    return GuardrailResult(blocked=False)
 
 
 def check_output(text: str) -> GuardrailResult:
