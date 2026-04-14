@@ -7,6 +7,7 @@ from langchain_core.messages import ToolMessage
 
 from tutor.state import TutorState
 from tutor.tools import calculator, web_search, scaffold_hint
+from tutor.guardrails import check_input, check_output
 
 # ---------------------------------------------------------------------------
 # LLM instances
@@ -282,3 +283,35 @@ def resume_session(state: TutorState) -> dict:
         "current_response": message,
         "session_paused": False,
     }
+
+
+# ---------------------------------------------------------------------------
+# Node: input_guard — runs at graph START before any LLM call
+# ---------------------------------------------------------------------------
+
+def input_guard(state: TutorState) -> dict:
+    """Check student input against all input guardrails.
+
+    On block: sets current_response to child-friendly message, input_blocked=True.
+    On pass:  sets input_blocked=False, leaves state otherwise unchanged.
+    """
+    result = check_input(state["student_input"])
+    if result.blocked:
+        return {"current_response": result.message, "input_blocked": True}
+    return {"input_blocked": False}
+
+
+# ---------------------------------------------------------------------------
+# Node: output_guard — runs before END on every path
+# ---------------------------------------------------------------------------
+
+def output_guard(state: TutorState) -> dict:
+    """Moderate current_response before it reaches the child.
+
+    On block: replaces current_response with safe fallback.
+    On pass:  returns empty dict (state unchanged).
+    """
+    result = check_output(state.get("current_response", ""))
+    if result.blocked:
+        return {"current_response": result.message}
+    return {}
