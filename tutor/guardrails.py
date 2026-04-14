@@ -195,8 +195,23 @@ def check_input(text: str) -> GuardrailResult:
 
 
 def check_output(text: str) -> GuardrailResult:
-    raise NotImplementedError
+    """Moderate LLM response before showing to child."""
+    moderation = _get_openai().moderations.create(input=text)
+    if moderation.results[0].flagged:
+        return GuardrailResult(blocked=True, message=_OUTPUT_FALLBACK)
+    return GuardrailResult(blocked=False)
 
 
 def filter_search_results(results: list[dict]) -> list[dict]:
-    raise NotImplementedError
+    """Remove moderation-flagged results from web_search output.
+
+    Uses a single batch API call for all results.
+    """
+    if not results:
+        return results
+    texts = [
+        f"{r.get('title', '')} {r.get('content', r.get('snippet', ''))}"
+        for r in results
+    ]
+    moderation = _get_openai().moderations.create(input=texts)
+    return [r for r, mod in zip(results, moderation.results) if not mod.flagged]
