@@ -8,9 +8,6 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from openai import OpenAI
-
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -45,13 +42,14 @@ _FUZZY_TARGETS = ["ignore", "instructions", "override", "system", "forget"]
 # Lazy initialisers (no imports at module level — safe for tests without API keys)
 # ---------------------------------------------------------------------------
 
-_openai_client: OpenAI | None = None
+_openai_client = None
 _nli_classifier = None
 
 
-def _get_openai() -> OpenAI:
+def _get_openai():
     global _openai_client
     if _openai_client is None:
+        from openai import OpenAI
         _openai_client = OpenAI()
     return _openai_client
 
