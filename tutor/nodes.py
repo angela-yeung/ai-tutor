@@ -271,7 +271,8 @@ def resume_session(state: TutorState) -> dict:
             f"You are a warm tutor. The student is coming back after a break. "
             f"Welcome them back in one short warm sentence. "
             f"Remind them what they were working on. "
-            f"Tell them you are happy to help again."
+            f"Tell them you are happy to help again.\n\n"
+            f"{SECURITY_RULES}"
         )
         response = _format_llm.invoke([
             {"role": "system", "content": system_prompt},
