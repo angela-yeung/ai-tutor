@@ -236,6 +236,7 @@ def test_filter_search_results_removes_flagged():
 
     assert len(filtered) == 1
     assert filtered[0]["title"] == "Safe Result"
+    mock_client.moderations.create.assert_called_once()
 
 
 def test_filter_search_results_all_clean():
