@@ -7,6 +7,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from tavily import TavilyClient
 
+from tutor.guardrails import filter_search_results
+
 
 _OPS = {
     ast.Add: op_module.add,
@@ -63,8 +65,9 @@ def web_search(query: str) -> str:
     try:
         client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
         response = client.search(query, max_results=3)
+        results = filter_search_results(response.get("results", []))
         parts = []
-        for result in response.get("results", []):
+        for result in results:
             title = result.get("title", "")
             content = result.get("content", result.get("snippet", ""))
             parts.append(f"{title}\n{content}")
