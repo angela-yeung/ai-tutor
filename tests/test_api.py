@@ -1,5 +1,6 @@
 """Tests for the FastAPI backend."""
 
+import asyncio
 import json
 import pytest
 from unittest.mock import patch, AsyncMock
@@ -44,7 +45,7 @@ class TestBuildInput:
         from tutor.graph import build_graph
         from api.streaming import _build_input
         graph = build_graph()
-        result = _build_input(graph, "brand-new-thread-xyz-987", "Hello")
+        result = asyncio.run(_build_input(graph, "brand-new-thread-xyz-987", "Hello"))
         assert result["student_input"] == "Hello"
         assert result["strategies_tried"] == []
         assert result["conversation_history"] == []
@@ -55,7 +56,7 @@ class TestBuildInput:
         from tutor.graph import build_graph
         from api.streaming import _build_input
         graph = build_graph()
-        result = _build_input(graph, "another-new-thread-abc", "What is 3+3?")
+        result = asyncio.run(_build_input(graph, "another-new-thread-abc", "What is 3+3?"))
         assert result["student_input"] == "What is 3+3?"
 
 

@@ -1,14 +1,15 @@
 """SSE streaming utilities for the tutor API."""
 
 import json
+import logging
 from typing import AsyncIterator
 
 
-def _build_input(graph, thread_id: str, message: str) -> dict:
+async def _build_input(graph, thread_id: str, message: str) -> dict:
     """Build the LangGraph input dict, seeding list fields on the first turn."""
     config = {"configurable": {"thread_id": thread_id}}
     state_update = {"student_input": message}
-    if not graph.get_state(config).values:
+    if not (await graph.aget_state(config)).values:
         state_update.update({
             "strategies_tried": [],
             "concepts_needing_review": [],
@@ -38,7 +39,7 @@ async def stream_chat(graph, thread_id: str, message: str) -> AsyncIterator[str]
       event: error  — if an exception occurs
     """
     config = {"configurable": {"thread_id": thread_id}}
-    input_state = _build_input(graph, thread_id, message)
+    input_state = await _build_input(graph, thread_id, message)
 
     try:
         async for event in graph.astream_events(input_state, config, version="v2"):
@@ -53,4 +54,5 @@ async def stream_chat(graph, thread_id: str, message: str) -> AsyncIterator[str]
         state = await graph.aget_state(config)
         yield f"event: done\ndata: {json.dumps(_extract_metadata(state))}\n\n"
     except Exception:
+        logging.exception("stream_chat error for thread_id=%s", thread_id)
         yield f"event: error\ndata: {json.dumps({'message': 'Something went wrong. Please try again.'})}\n\n"

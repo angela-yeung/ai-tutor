@@ -15,6 +15,8 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
         from langgraph.checkpoint.redis import RedisSaver
