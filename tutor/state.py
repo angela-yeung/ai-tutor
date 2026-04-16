@@ -6,7 +6,7 @@ class TutorState(TypedDict):
     student_input: str
     concept: str                                           # topic extracted by classify_question
     question_type: str                                     # "factual" | "reasoning"
-    strategies_tried: Annotated[list, operator.add]        # strategies used so far (grows each turn)
+    strategies_tried: list                                  # strategies used so far (grows per concept, resets on topic change)
     conversation_history: Annotated[list, operator.add]    # {"role": ..., "content": ...} message log
     current_response: str                                  # latest assistant response
     session_paused: bool                                   # True when escalate is triggered

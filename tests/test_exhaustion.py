@@ -154,3 +154,35 @@ class TestReasoningLoopEscalateSignal:
             mock_llm.invoke.return_value = mock_response
             result = reasoning_react_loop(_base_state(student_input="I want to quit"))
         assert result.get("concepts_needing_review", []) == []
+
+
+# ---------------------------------------------------------------------------
+# reasoning_react_loop — manual strategy accumulation
+# ---------------------------------------------------------------------------
+
+class TestStrategyAccumulation:
+    def test_strategies_accumulate_across_turns(self):
+        """When state already has strategies, new ones are appended, not replaced."""
+        # Turn 1 already tried guiding_question; turn 2 the LLM calls scaffold_hint
+        # and gets analogy — result should contain both.
+        tool_call = {
+            "id": "tc1",
+            "name": "scaffold_hint",
+            "args": {"concept": "addition", "strategy": "analogy"}
+        }
+
+        first_response = make_mock_response("", tool_calls=[tool_call])
+        second_response = make_mock_response("Here is a hint about toys!")
+
+        scaffold_result = {"strategy": "analogy", "hint": "Think of it like sharing toys!"}
+
+        with patch("tutor.nodes._reasoning_llm") as mock_llm, \
+             patch("tutor.nodes.scaffold_hint") as mock_hint:
+            mock_llm.invoke.side_effect = [first_response, second_response]
+            mock_hint.invoke.return_value = scaffold_result
+            result = reasoning_react_loop(_base_state(
+                strategies_tried=["guiding_question"],
+                concept="addition",
+            ))
+
+        assert result["strategies_tried"] == ["guiding_question", "analogy"]

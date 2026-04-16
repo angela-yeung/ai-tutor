@@ -225,7 +225,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
     return {
         "current_response": final_response,
         "session_paused": session_paused,
-        "strategies_tried": new_strategies,
+        "strategies_tried": strategies_tried + new_strategies,
         "concepts_needing_review": concepts_needing_review,
         "conversation_history": [
             {"role": "user", "content": state["student_input"]},
