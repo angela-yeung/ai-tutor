@@ -98,3 +98,82 @@ class TestExtractMetadata:
         result = _extract_metadata(snap)
         assert result["concept"] == "multiplication"
         assert result["session_paused"] is False
+
+
+# ---------------------------------------------------------------------------
+# Endpoint integration tests
+# ---------------------------------------------------------------------------
+
+async def _fake_stream(graph, thread_id: str, message: str):
+    """Minimal fake SSE stream for endpoint tests — no LLM calls."""
+    yield 'event: token\ndata: {"chunk": "Hello"}\n\n'
+    yield 'event: token\ndata: {"chunk": " there"}\n\n'
+    yield (
+        'event: done\ndata: '
+        + json.dumps({
+            "session_paused": False,
+            "concept": "addition",
+            "concepts_needing_review": [],
+            "conversation_history": [],
+        })
+        + "\n\n"
+    )
+
+
+@pytest.fixture
+def client():
+    from api.main import app
+    with TestClient(app) as c:
+        yield c
+
+
+class TestHealthEndpoint:
+    def test_returns_200(self, client):
+        r = client.get("/health")
+        assert r.status_code == 200
+
+    def test_returns_ok_json(self, client):
+        r = client.get("/health")
+        assert r.json() == {"status": "ok"}
+
+
+class TestChatEndpoint:
+    def test_returns_200(self, client):
+        with patch("api.router.stream_chat", side_effect=_fake_stream):
+            r = client.post("/chat", json={"thread_id": "t1", "message": "hi"})
+        assert r.status_code == 200
+
+    def test_content_type_is_event_stream(self, client):
+        with patch("api.router.stream_chat", side_effect=_fake_stream):
+            r = client.post("/chat", json={"thread_id": "t1", "message": "hi"})
+        assert "text/event-stream" in r.headers["content-type"]
+
+    def test_stream_contains_token_events(self, client):
+        with patch("api.router.stream_chat", side_effect=_fake_stream):
+            r = client.post("/chat", json={"thread_id": "t1", "message": "hi"})
+        events = [e for e in r.text.split("\n\n") if e.strip()]
+        token_events = [e for e in events if e.startswith("event: token")]
+        assert len(token_events) == 2
+
+    def test_stream_contains_exactly_one_done_event(self, client):
+        with patch("api.router.stream_chat", side_effect=_fake_stream):
+            r = client.post("/chat", json={"thread_id": "t1", "message": "hi"})
+        events = [e for e in r.text.split("\n\n") if e.strip()]
+        done_events = [e for e in events if e.startswith("event: done")]
+        assert len(done_events) == 1
+
+    def test_done_event_payload_has_required_keys(self, client):
+        with patch("api.router.stream_chat", side_effect=_fake_stream):
+            r = client.post("/chat", json={"thread_id": "t1", "message": "hi"})
+        events = [e for e in r.text.split("\n\n") if e.strip()]
+        done_event = next(e for e in events if e.startswith("event: done"))
+        data_line = done_event.split("\n")[1]
+        payload = json.loads(data_line.replace("data: ", ""))
+        assert "session_paused" in payload
+        assert "concept" in payload
+        assert "concepts_needing_review" in payload
+        assert "conversation_history" in payload
+
+    def test_invalid_request_body_returns_422(self, client):
+        r = client.post("/chat", json={"message": "missing thread_id"})
+        assert r.status_code == 422
