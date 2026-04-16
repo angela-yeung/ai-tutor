@@ -220,7 +220,10 @@ def reasoning_react_loop(state: TutorState) -> dict:
 
     except (openai.APIError, openai.RateLimitError) as e:
         print(f"[API ERROR] {e}", file=sys.stderr)
-        return {"current_response": "Oops! Something went wrong. Let us try again!"}
+        return {
+            "current_response": "Oops! Something went wrong. Let us try again!",
+            "strategies_tried": strategies_tried,
+        }
 
     return {
         "current_response": final_response,
