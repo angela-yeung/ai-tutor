@@ -57,7 +57,7 @@ def classify_question(state: TutorState) -> dict:
             "'factual' = a fixed fact that can be looked up (capital cities, animal facts, historical events, definitions). "
             "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
             "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
-            "Examples: factual|capital of France|false, reasoning|simple addition|true, factual|spider legs|false. "
+            "Examples: factual|capital of France|false, reasoning|simple addition|true, reasoning|word problem subtraction|false, factual|spider legs|true."
             "Only output the format, nothing else."
         )
     else:
@@ -99,7 +99,7 @@ def classify_question(state: TutorState) -> dict:
 
     # Reset strategies if the student switched topics
     if prev_concept and len(parts) >= 3:
-        same_topic = parts[2].strip().lower()
+        same_topic = parts[-1].strip().lower()
         if same_topic == "false":
             result["strategies_tried"] = []
 
