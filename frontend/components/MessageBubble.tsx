@@ -17,7 +17,7 @@ export default function MessageBubble({ message }: Props) {
     >
       {message.content}
       {message.streaming && (
-        <span className="inline-block w-2 h-4 ml-0.5 bg-slate-400 animate-pulse rounded-sm" />
+        <span aria-hidden="true" className="inline-block w-2 h-4 ml-0.5 bg-slate-400 animate-pulse rounded-sm" />
       )}
     </div>
   );
