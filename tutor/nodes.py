@@ -10,13 +10,41 @@ from tutor.tools import calculator, web_search, scaffold_hint
 from tutor.guardrails import check_input, check_output, wrap_student_input, SECURITY_RULES
 
 # ---------------------------------------------------------------------------
-# LLM instances
+# LLM instances (lazy — instantiated on first use to avoid import-time API key check)
 # ---------------------------------------------------------------------------
 
-_classifier_llm = ChatOpenAI(model="gpt-4o", temperature=0)
-_factual_llm = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools([web_search])
-_reasoning_llm = ChatOpenAI(model="gpt-4o", temperature=0.7).bind_tools([calculator, scaffold_hint])
-_format_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+_classifier_llm = None
+_factual_llm = None
+_reasoning_llm = None
+_format_llm = None
+
+
+def _get_classifier_llm():
+    global _classifier_llm
+    if _classifier_llm is None:
+        _classifier_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    return _classifier_llm
+
+
+def _get_factual_llm():
+    global _factual_llm
+    if _factual_llm is None:
+        _factual_llm = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools([web_search])
+    return _factual_llm
+
+
+def _get_reasoning_llm():
+    global _reasoning_llm
+    if _reasoning_llm is None:
+        _reasoning_llm = ChatOpenAI(model="gpt-4o", temperature=0.7).bind_tools([calculator, scaffold_hint])
+    return _reasoning_llm
+
+
+def _get_format_llm():
+    global _format_llm
+    if _format_llm is None:
+        _format_llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    return _format_llm
 
 # ---------------------------------------------------------------------------
 # Age rule
@@ -77,7 +105,7 @@ def classify_question(state: TutorState) -> dict:
         )
 
     try:
-        response = _classifier_llm.invoke([
+        response = _get_classifier_llm().invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": wrap_student_input(state["student_input"])},
         ])
@@ -135,7 +163,7 @@ def factual_react_loop(state: TutorState) -> dict:
     try:
         response = None
         while True:
-            response = _factual_llm.invoke(messages)
+            response = _get_factual_llm().invoke(messages)
             if not response.tool_calls:
                 break
             # Append assistant message with tool calls
@@ -207,7 +235,7 @@ def reasoning_react_loop(state: TutorState) -> dict:
 
     try:
         while True:
-            response = _reasoning_llm.invoke(messages)
+            response = _get_reasoning_llm().invoke(messages)
 
             # Check for text signals BEFORE tool calls
             if not response.tool_calls:
@@ -310,7 +338,7 @@ def resume_session(state: TutorState) -> dict:
             f"Tell them you are happy to help again.\n\n"
             f"{SECURITY_RULES}"
         )
-        response = _format_llm.invoke([
+        response = _get_format_llm().invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"The student was working on: {concept}. Welcome them back."},
         ])
