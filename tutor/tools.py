@@ -35,7 +35,14 @@ def _eval_node(node):
     raise ValueError(f"Unsupported expression node: {type(node).__name__}")
 
 
-_hint_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+_hint_llm = None
+
+
+def _get_hint_llm():
+    global _hint_llm
+    if _hint_llm is None:
+        _hint_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+    return _hint_llm
 
 _VALID_STRATEGIES = [
     "guiding_question",
@@ -107,7 +114,7 @@ def scaffold_hint(concept: str, strategies_tried: list[str]) -> dict:
         SystemMessage(content=system_prompt),
         HumanMessage(content=f"Generate a {chosen_strategy} hint for: {concept}"),
     ]
-    response = _hint_llm.invoke(messages)
+    response = _get_hint_llm().invoke(messages)
     hint_text = response.content.strip()
 
     return {"strategy": chosen_strategy, "hint": hint_text}
