@@ -17,7 +17,7 @@ function makeStream(chunks: string[]): ReadableStream<Uint8Array> {
 function mockFetch(chunks: string[]) {
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({ body: makeStream(chunks) })
+    vi.fn().mockResolvedValue({ ok: true, body: makeStream(chunks) })
   );
 }
 

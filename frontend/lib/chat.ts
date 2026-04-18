@@ -1,7 +1,5 @@
 import type { DoneMeta } from "./types";
 
-export type { DoneMeta };
-
 export async function streamChat(
   threadId: string,
   message: string,
@@ -10,13 +8,23 @@ export async function streamChat(
   onError: (msg: string) => void
 ): Promise<void> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      onError("Something went wrong. Please try again.");
+      return;
+    }
+
+    const res = await fetch(`${apiUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread_id: threadId, message }),
     });
 
-    const reader = res.body!.getReader();
+    if (!res.ok || !res.body) {
+      onError("Something went wrong. Please try again.");
+      return;
+    }
+    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 

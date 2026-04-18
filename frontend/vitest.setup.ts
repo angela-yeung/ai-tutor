@@ -1,5 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 
+// Set up environment variables for tests
+process.env.NEXT_PUBLIC_API_URL = "http://localhost:3000/api";
+
 // Ensure localStorage has all required methods (jsdom doesn't always provide them)
 if (typeof window !== "undefined") {
   const store: Record<string, string> = {};
