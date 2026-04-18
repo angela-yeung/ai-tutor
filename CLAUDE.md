@@ -30,6 +30,39 @@ python tests/evals/run_phoenix_evals.py
 
 Requires `OPENAI_API_KEY` env var. All LLM calls use `gpt-4o`. `TAVILY_API_KEY` required for web search in factual loop.
 
+`REDIS_URL` optional — if set, uses `RedisSaver` for persistence (production); otherwise `MemorySaver` (local dev/tests).
+
+## Frontend Commands
+
+```bash
+cd frontend
+npm install          # first time only
+npm run dev          # Next.js dev server on http://localhost:3000
+npm run test         # Vitest unit tests (frontend/tests/)
+npm run build        # Production build
+```
+
+## API Server
+
+```bash
+uvicorn api.main:app --reload   # FastAPI dev server on http://localhost:8000
+# Or use Docker Compose for full stack:
+docker-compose up
+```
+
+**Endpoints:** `GET /health`, `POST /chat` (SSE streaming response).
+
+**API architecture** (`/api/`):
+- `main.py` — FastAPI app factory; initialises tutor graph in lifespan; selects `RedisSaver` vs `MemorySaver` based on `REDIS_URL`
+- `router.py` — route handlers; `/chat` returns `StreamingResponse` (text/event-stream)
+- `streaming.py` — drives LangGraph `invoke()`, emits SSE `data:` lines, sends `done` event with metadata (including `concepts_needing_review`)
+- `schemas.py` — Pydantic request/response models
+
+**Frontend architecture** (`/frontend/`):
+- Next.js 14 app router; components in `components/`; SSE client in `lib/chat.ts`
+- `ReviewPanel` component — collapsible; only renders when `concepts_needing_review` is non-empty
+- Tests use Vitest + Testing Library (`frontend/tests/`)
+
 ## Architecture
 
 A LangGraph `StateGraph` compiled with `MemorySaver`. Each CLI turn is one `invoke()` call.
@@ -59,6 +92,8 @@ A LangGraph `StateGraph` compiled with `MemorySaver`. Each CLI turn is one `invo
 **`output_guard`**: Terminal node before END. Runs OpenAI moderation on `current_response`. On flag: replaces with safe fallback. On pass: state unchanged.
 
 **`route_after_classify`, `route_after_reasoning`, `entry_router`, `route_after_input_guard`** are pure functions (no LLM calls) — independently testable.
+
+**`guardrails.py`**: Houses all guardrail logic (injection detection, NLI topic scope, length cap, OpenAI moderation) called by `input_guard` and `output_guard` nodes.
 
 ## State fields
 
