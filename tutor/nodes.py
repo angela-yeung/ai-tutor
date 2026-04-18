@@ -39,28 +39,52 @@ _AGE_RULE = (
 # ---------------------------------------------------------------------------
 
 def classify_question(state: TutorState) -> dict:
-    """Binary classify student input as factual or reasoning, extract concept."""
-    system_prompt = (
-        f'{_date_context()}'
-        "Classify the student's question. "
-        "Output EXACTLY in this format: <type>|<concept> "
-        "where type is 'factual' or 'reasoning', and concept is the key topic in 3 words or fewer. "
-        "'factual' = a fixed fact that can be looked up (capital cities, animal facts, historical events, definitions). "
-        "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
-        "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
-        "Examples: factual|capital of France, reasoning|simple addition, factual|spider legs, "
-        "reasoning|7 plus 4, reasoning|word problem subtraction. "
-        "Only output the format, nothing else.\n\n"
-        f"{SECURITY_RULES}"
-    )
+    """Binary classify student input as factual or reasoning, extract concept.
+
+    When a previous concept exists, also detects topic change and resets
+    strategies_tried if the student has switched topics.
+    """
+    prev_concept = state.get("concept", "")
+
+    if prev_concept:
+        system_prompt = (
+            f'{_date_context()}'
+            "Classify the student's question. "
+            f"The student's previous topic was: \"{prev_concept}\". "
+            "Output EXACTLY in this format: <type>|<concept>|<same_topic> "
+            "where type is 'factual' or 'reasoning', concept is the key topic in 3 words or fewer, "
+            "and same_topic is 'true' if the new question is semantically the same topic as the previous one, "
+            "or 'false' if the topic has changed. "
+            "'factual' = a fixed fact that can be looked up (capital cities, animal facts, historical events, definitions). "
+            "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
+            "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
+            "Examples: factual|capital of France|false, reasoning|simple addition|true, reasoning|word problem subtraction|false, factual|spider legs|true."
+            "Only output the format, nothing else.\n\n"
+            f"{SECURITY_RULES}"
+        )
+    else:
+        system_prompt = (
+            f'{_date_context()}'
+            "Classify the student's question. "
+            "Output EXACTLY in this format: <type>|<concept> "
+            "where type is 'factual' or 'reasoning', and concept is the key topic in 3 words or fewer. "
+            "'factual' = a fixed fact that can be looked up (capital cities, animal facts, historical events, definitions). "
+            "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
+            "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
+            "Examples: factual|capital of France, reasoning|simple addition, factual|spider legs, "
+            "reasoning|7 plus 4, reasoning|word problem subtraction. "
+            "Only output the format, nothing else."
+        )
+
     try:
         response = _classifier_llm.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": wrap_student_input(state["student_input"])},
         ])
         raw = response.content.strip()
-        parts = raw.split("|", 1)
-        if len(parts) == 2:
+        parts = raw.split("|")
+
+        if len(parts) >= 2:
             question_type = parts[0].strip().lower()
             concept = parts[1].strip()
             if question_type not in ("factual", "reasoning"):
@@ -68,11 +92,20 @@ def classify_question(state: TutorState) -> dict:
         else:
             question_type = "reasoning"
             concept = state["student_input"][:50]
+
     except (openai.APIError, openai.RateLimitError) as e:
         print(f"[API ERROR] {e}", file=sys.stderr)
         return {"current_response": "Oops! Something went wrong. Let us try again!"}
 
-    return {"question_type": question_type, "concept": concept}
+    result: dict = {"question_type": question_type, "concept": concept}
+
+    # Reset strategies if the student switched topics
+    if prev_concept and len(parts) >= 3:
+        same_topic = parts[-1].strip().lower()
+        if same_topic == "false":
+            result["strategies_tried"] = []
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -224,12 +257,15 @@ def reasoning_react_loop(state: TutorState) -> dict:
 
     except (openai.APIError, openai.RateLimitError) as e:
         print(f"[API ERROR] {e}", file=sys.stderr)
-        return {"current_response": "Oops! Something went wrong. Let us try again!"}
+        return {
+            "current_response": "Oops! Something went wrong. Let us try again!",
+            "strategies_tried": strategies_tried,
+        }
 
     return {
         "current_response": final_response,
         "session_paused": session_paused,
-        "strategies_tried": new_strategies,
+        "strategies_tried": strategies_tried + new_strategies,
         "concepts_needing_review": concepts_needing_review,
         "conversation_history": [
             {"role": "user", "content": state["student_input"]},

@@ -142,3 +142,59 @@ class TestClassifyFallback:
             result = classify_question(_base_state("Some question"))
         assert result["question_type"] == "reasoning"
         assert result["concept"] == "some concept"
+
+
+# ---------------------------------------------------------------------------
+# Topic-change detection
+# ---------------------------------------------------------------------------
+
+class TestTopicChangeDetection:
+    def test_no_reset_on_initial_turn(self):
+        """First turn (no previous concept): strategies_tried must not appear in result."""
+        state = _base_state("What is 5 + 3?")
+        # _base_state already sets concept="" and strategies_tried=[]
+        with patch("tutor.nodes._classifier_llm") as mock_llm:
+            mock_llm.invoke.return_value = make_mock_response("reasoning|simple addition")
+            result = classify_question(state)
+        assert "strategies_tried" not in result
+
+    def test_no_reset_on_same_topic(self):
+        """Same topic as previous turn: strategies_tried must not appear in result."""
+        state = _base_state("What is 7 + 4?")
+        state["concept"] = "simple addition"
+        state["strategies_tried"] = ["guiding_question"]
+        with patch("tutor.nodes._classifier_llm") as mock_llm:
+            mock_llm.invoke.return_value = make_mock_response("reasoning|simple addition|true")
+            result = classify_question(state)
+        assert "strategies_tried" not in result
+
+    def test_reset_on_topic_change(self):
+        """Different topic from previous turn: strategies_tried must be reset to []."""
+        state = _base_state("How far is the moon?")
+        state["concept"] = "simple addition"
+        state["strategies_tried"] = ["guiding_question", "analogy"]
+        with patch("tutor.nodes._classifier_llm") as mock_llm:
+            mock_llm.invoke.return_value = make_mock_response("factual|moon distance|false")
+            result = classify_question(state)
+        assert result.get("strategies_tried") == []
+
+    def test_no_reset_when_llm_returns_two_parts_on_subsequent_turn(self):
+        """If LLM drops same_topic field on subsequent turn, no reset should fire."""
+        state = _base_state("What is 7 + 4?")
+        state["concept"] = "simple addition"
+        state["strategies_tried"] = ["guiding_question"]
+        with patch("tutor.nodes._classifier_llm") as mock_llm:
+            mock_llm.invoke.return_value = make_mock_response("reasoning|simple addition")
+            result = classify_question(state)
+        assert "strategies_tried" not in result
+
+    def test_no_incorrect_reset_when_concept_contains_pipe(self):
+        """If concept contains a pipe, same_topic must still be read from the last field."""
+        state = _base_state("What is 7 + 4?")
+        state["concept"] = "simple addition"
+        state["strategies_tried"] = ["guiding_question"]
+        with patch("tutor.nodes._classifier_llm") as mock_llm:
+            # Concept contains a pipe; same_topic is the last field = "true" (no reset)
+            mock_llm.invoke.return_value = make_mock_response("reasoning|addition|subtraction|true")
+            result = classify_question(state)
+        assert "strategies_tried" not in result
