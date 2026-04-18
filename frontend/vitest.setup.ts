@@ -6,7 +6,7 @@ if (typeof window !== "undefined") {
 
   // Create a proper storage object with all methods
   const storageProxy = {
-    getItem: (key: string) => store[key] || null,
+    getItem: (key: string) => (key in store ? store[key] : null),
     setItem: (key: string, value: string) => {
       store[key] = value.toString();
     },
