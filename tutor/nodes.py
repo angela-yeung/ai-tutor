@@ -7,6 +7,7 @@ from langchain_core.messages import ToolMessage
 
 from tutor.state import TutorState
 from tutor.tools import calculator, web_search, scaffold_hint
+from tutor.guardrails import check_input, check_output, wrap_student_input, SECURITY_RULES
 
 # ---------------------------------------------------------------------------
 # LLM instances
@@ -58,7 +59,8 @@ def classify_question(state: TutorState) -> dict:
             "'reasoning' = the student must work through a problem (ANY arithmetic calculation, word problems, sequences, patterns). "
             "IMPORTANT: ALL arithmetic is 'reasoning', even simple sums like 7+4 or 10-3. "
             "Examples: factual|capital of France|false, reasoning|simple addition|true, reasoning|word problem subtraction|false, factual|spider legs|true."
-            "Only output the format, nothing else."
+            "Only output the format, nothing else.\n\n"
+            f"{SECURITY_RULES}"
         )
     else:
         system_prompt = (
@@ -77,7 +79,7 @@ def classify_question(state: TutorState) -> dict:
     try:
         response = _classifier_llm.invoke([
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": state["student_input"]},
+            {"role": "user", "content": wrap_student_input(state["student_input"])},
         ])
         raw = response.content.strip()
         parts = raw.split("|")
@@ -120,13 +122,14 @@ def factual_react_loop(state: TutorState) -> dict:
         f'First, reason about whether you need to search for the answer. '
         f'If you need current or specific information, use the web_search tool. '
         f'Then give a warm, enriching answer with fun facts. '
-        f'{_AGE_RULE}'
+        f'{_AGE_RULE}\n\n'
+        f'{SECURITY_RULES}'
     )
 
     messages: list = [{"role": "system", "content": system_prompt}]
     for msg in state.get("conversation_history", []):
         messages.append(msg)
-    messages.append({"role": "user", "content": state["student_input"]})
+    messages.append({"role": "user", "content": wrap_student_input(state["student_input"])})
 
     tools_called: list[str] = []  # eval only — discarded by LangGraph state
     try:
@@ -187,13 +190,14 @@ def reasoning_react_loop(state: TutorState) -> dict:
         f'ask one simpler confidence-rebuilding question, then output on a new line: REVIEW:{{concept}}\n'
         f'5. Otherwise: choose the single best next strategy not already in strategies_tried, '
         f'then call the scaffold_hint tool OR the calculator tool if arithmetic verification would help.\n\n'
-        f'{_AGE_RULE}'
+        f'{_AGE_RULE}\n\n'
+        f'{SECURITY_RULES}'
     )
 
     messages: list = [{"role": "system", "content": system_prompt}]
     for msg in state.get("conversation_history", []):
         messages.append(msg)
-    messages.append({"role": "user", "content": state["student_input"]})
+    messages.append({"role": "user", "content": wrap_student_input(state["student_input"])})
 
     new_strategies: list = []
     final_response = ""
@@ -303,7 +307,8 @@ def resume_session(state: TutorState) -> dict:
             f"You are a warm tutor. The student is coming back after a break. "
             f"Welcome them back in one short warm sentence. "
             f"Remind them what they were working on. "
-            f"Tell them you are happy to help again."
+            f"Tell them you are happy to help again.\n\n"
+            f"{SECURITY_RULES}"
         )
         response = _format_llm.invoke([
             {"role": "system", "content": system_prompt},
@@ -318,3 +323,35 @@ def resume_session(state: TutorState) -> dict:
         "current_response": message,
         "session_paused": False,
     }
+
+
+# ---------------------------------------------------------------------------
+# Node: input_guard — runs at graph START before any LLM call
+# ---------------------------------------------------------------------------
+
+def input_guard(state: TutorState) -> dict:
+    """Check student input against all input guardrails.
+
+    On block: sets current_response to child-friendly message, input_blocked=True.
+    On pass:  sets input_blocked=False, leaves state otherwise unchanged.
+    """
+    result = check_input(state["student_input"])
+    if result.blocked:
+        return {"current_response": result.message, "input_blocked": True}
+    return {"input_blocked": False}
+
+
+# ---------------------------------------------------------------------------
+# Node: output_guard — runs before END on every path
+# ---------------------------------------------------------------------------
+
+def output_guard(state: TutorState) -> dict:
+    """Moderate current_response before it reaches the child.
+
+    On block: replaces current_response with safe fallback.
+    On pass:  returns empty dict (state unchanged).
+    """
+    result = check_output(state.get("current_response", ""))
+    if result.blocked:
+        return {"current_response": result.message}
+    return {}

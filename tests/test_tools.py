@@ -48,7 +48,8 @@ class TestWebSearch:
         mock_client = MagicMock()
         mock_client.search.return_value = fake_response
 
-        with patch("tutor.tools.TavilyClient", return_value=mock_client):
+        with patch("tutor.tools.TavilyClient", return_value=mock_client), \
+             patch("tutor.tools.filter_search_results", side_effect=lambda r: r):
             result = web_search.invoke({"query": "test query"})
 
         assert "Result One" in result
@@ -57,6 +58,28 @@ class TestWebSearch:
         assert "Second snippet." in result
         # Two results separated by double newline
         assert "\n\n" in result
+
+    def test_filtered_results_excluded(self):
+        """Web search removes moderation-flagged results before returning."""
+        fake_response = {
+            "results": [
+                {"title": "Clean Result", "content": "Educational content."},
+                {"title": "Flagged Result", "content": "Harmful content."},
+            ]
+        }
+        mock_client = MagicMock()
+        mock_client.search.return_value = fake_response
+
+        # filter_search_results keeps only first result
+        def fake_filter(results):
+            return [results[0]]
+
+        with patch("tutor.tools.TavilyClient", return_value=mock_client), \
+             patch("tutor.tools.filter_search_results", side_effect=fake_filter):
+            result = web_search.invoke({"query": "test query"})
+
+        assert "Clean Result" in result
+        assert "Flagged Result" not in result
 
     def test_error_returns_empty(self):
         with patch("tutor.tools.TavilyClient", side_effect=Exception("network error")):
