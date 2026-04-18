@@ -41,22 +41,24 @@ A LangGraph `StateGraph` compiled with `MemorySaver`. Each CLI turn is one `invo
 **`classify_question`** runs on every turn — binary classification (`factual` / `reasoning`) with concept extraction. Constrained output format: `<type>|<concept>`.
 
 **Post-classify routing** (`graph.py: route_after_classify`):
-- `factual` → `factual_react_loop` → `format_response` → END
+- `factual` → `factual_react_loop` → `output_guard` → END
 - `reasoning` → `reasoning_react_loop`
 
 **`reasoning_react_loop` routing** (`graph.py: route_after_reasoning`):
-- `session_paused=True` → `escalate` → END
-- otherwise → `format_response` → END
+- `session_paused=True` → `escalate` → `output_guard` → END
+- otherwise → `output_guard` → END
 
-**`resume_session`** → END (shows welcome back, clears `session_paused`; next turn goes to `classify_question`)
+**`resume_session`** → `output_guard` → END (shows welcome back, clears `session_paused`; next turn goes to `classify_question`)
 
 **ReAct loops**: both loops use a while-loop pattern (LLM invoked with bound tools → if tool_calls → execute tool via `.invoke()` → append ToolMessage → continue → if no tool_calls → done). Tools are called via `.invoke()` for Phoenix auto-instrumentation.
 
 **`reasoning_react_loop` Reason step** instructs the LLM to: (1) read `strategies_tried` — never repeat, (2) assess progress from `conversation_history`, (3) detect distress → output ESCALATE, (4) confirm understanding if demonstrated, (5) handle exhaustion (all 5 strategies tried → output direct answer + REVIEW:<concept>), (6) otherwise call `scaffold_hint` tool.
 
-**`format_response`**: dedicated post-processing node. Rewrites `current_response` for Grade 1 audience. Applied to output from both loops.
+**`input_guard`**: First node after START. Runs all input guardrails (injection detection, length cap, NLI topic scope, OpenAI moderation). On block: sets `input_blocked=True` and `current_response` to safe deflection, then routes to `output_guard`. On pass: routes to `entry_router`.
 
-**`route_after_classify`, `route_after_reasoning`, `entry_router`** are pure functions (no LLM calls) — independently testable.
+**`output_guard`**: Terminal node before END. Runs OpenAI moderation on `current_response`. On flag: replaces with safe fallback. On pass: state unchanged.
+
+**`route_after_classify`, `route_after_reasoning`, `entry_router`, `route_after_input_guard`** are pure functions (no LLM calls) — independently testable.
 
 ## State fields
 
@@ -69,6 +71,7 @@ Defined in `tutor/state.py` as a `TypedDict`. Key fields:
 - `current_response` — latest assistant response
 - `session_paused` — set `True` by `reasoning_react_loop` on distress; cleared by `resume_session`
 - `concepts_needing_review` — `Annotated[list, operator.add]`; populated on strategy exhaustion; printed at session end
+- `input_blocked` — `bool`; set `True` by `input_guard` on block; cleared each new turn
 
 ## Testing
 
