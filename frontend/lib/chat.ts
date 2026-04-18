@@ -38,10 +38,15 @@ export async function streamChat(
         const eventLine = part.match(/^event: (\w+)/m)?.[1];
         const dataLine = part.match(/^data: (.+)/m)?.[1];
         if (!eventLine || !dataLine) continue;
-        const payload = JSON.parse(dataLine);
-        if (eventLine === "token") onToken(payload.chunk);
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(dataLine);
+        } catch {
+          continue;
+        }
+        if (eventLine === "token") onToken(payload.chunk as string);
         else if (eventLine === "done") onDone(payload as DoneMeta);
-        else if (eventLine === "error") onError(payload.message);
+        else if (eventLine === "error") { onError(payload.message as string); return; }
       }
     }
   } catch {

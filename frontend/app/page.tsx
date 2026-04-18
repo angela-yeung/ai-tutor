@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import ChatWindow from "@/components/ChatWindow";
 import InputBar from "@/components/InputBar";
 import PausedBanner from "@/components/PausedBanner";
@@ -15,11 +15,9 @@ export default function ChatPage() {
   const [isPaused, setIsPaused] = useState(false);
   const [conceptsNeedingReview, setConceptsNeedingReview] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const threadIdRef = useRef<string>("");
-
-  useEffect(() => {
-    threadIdRef.current = getThreadId();
-  }, []);
+  const threadIdRef = useRef<string>(
+    typeof window !== "undefined" ? getThreadId() : ""
+  );
 
   function addUserMessage(content: string): string {
     const id = crypto.randomUUID();
@@ -57,6 +55,7 @@ export default function ChatPage() {
   }
 
   async function handleSend(message: string) {
+    if (isStreaming) return;
     setError(null);
     addUserMessage(message);
     const assistantId = addAssistantPlaceholder();
