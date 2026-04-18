@@ -4,16 +4,12 @@ A LangGraph-based AI tutor for Grade 1 students (age 6) that adapts its behavior
 
 ## Problem Statement
 
-Students often turn to AI tools for homework help and receive direct answers, bypassing the cognitive effort required for genuine understanding. This creates a dependency that undermines learning outcomes and critical thinking development.
+When children use AI tools for homework help, they typically receive direct answers — bypassing the cognitive effort that builds genuine understanding. Current tutoring tools compound this: they either hand over answers too readily, follow rigid scripts that can't
+adapt to a child's reasoning, or lack the emotional awareness to recognise when a student is frustrated rather than just stuck.
 
-Existing tutoring tools either:
-• Provide answers too readily, short-circuiting the learning process
-• Are too rigid and scripted, failing to adapt to a student's individual reasoning path
-• Lack emotional intelligence to recognise and respond to frustration or confusion
+The deeper problem is that not all questions are the same. *"What is the capital of France?"* needs a fact. *"I don't understand why 3 + 4 = 7"* needs something else entirely — an adaptive guide that meets the child where they are, tries a different approach if the first doesn't land, and knows when to slow down.
 
-A static chatbot gives the same kind of answer regardless of whether a child asks *"What is the capital of France?"* or *"I don't understand why 3 + 4 = 7."* These are fundamentally different cognitive situations. The first needs a fact. The second needs adaptive Socratic guidance — the kind that meets the child where they are, tries a different approach if the first one doesn't land, and recognizes when a child is frustrated and needs a break.
-
-The Personal AI Tutoring Assistant is a conversational learning tool that supports factual questions and helps Grade 1 students (age 6) understand concepts through guided, Socratic dialogue. Rather than providing direct answers to reasoning questions, the assistant scaffolds problem-solving by asking probing questions, offering analogies, and progressively breaking down complex topics — developing critical thinking alongside subject knowledge.
+This Personal AI Tutoring Assistant is a conversational learning tool for Grade 1 students that treats these two situations differently by design. Factual questions get direct, age-appropriate answers. Conceptual questions get Socratic scaffolding — probing questions, analogies, and progressive hints — that guides a child toward understanding rather than just giving it to them.
 
 ## Features
 
