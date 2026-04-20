@@ -3,6 +3,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY requirements.txt .
+# Install CPU-only torch first (~200 MB vs ~2.5 GB for CUDA build) to avoid build timeouts
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the NLI model at build time so it's baked into the image
