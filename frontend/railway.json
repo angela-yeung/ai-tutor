@@ -3,6 +3,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node .next/standalone/server.js"
+    "startCommand": "next start -p ${PORT:-3000}"
   }
 }
