@@ -39,9 +39,12 @@ def _setup_phoenix() -> None:
         from phoenix.otel import register
         from openinference.instrumentation.langchain import LangChainInstrumentor
 
+        base = os.environ.get("PHOENIX_COLLECTOR_ENDPOINT")
+        if not base:
+            return  # tracing is opt-in; set PHOENIX_COLLECTOR_ENDPOINT to enable
+
         # Phoenix serve listens for OTLP over HTTP — must use the /v1/traces
         # path explicitly, otherwise register() defaults to gRPC on port 4317.
-        base = os.environ.get("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006")
         endpoint = base.rstrip("/") + "/v1/traces"
 
         tracer_provider = register(
