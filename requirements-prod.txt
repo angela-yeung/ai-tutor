@@ -1,11 +1,10 @@
 # Production dependencies only — excludes heavy eval/dev packages (arize-phoenix, pandas, pytest)
+# torch and transformers removed: NLI topic check replaced with gpt-4o-mini call
 langgraph>=0.2
 langchain-openai>=0.2
 openai>=1.0
 python-dotenv>=1.0
 tavily-python>=0.3
-transformers>=4.40
-torch>=2.0
 
 # Observability (tracing only, no evals)
 openinference-instrumentation-langchain>=0.1.29

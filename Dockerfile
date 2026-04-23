@@ -3,8 +3,6 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY requirements-prod.txt .
-# Install CPU-only torch first (~200 MB vs ~2.5 GB for CUDA build) to avoid build timeouts
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements-prod.txt
 
 COPY . .

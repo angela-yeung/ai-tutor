@@ -20,11 +20,12 @@ _CHILD_DEFLECTION = (
 )
 _OUTPUT_FALLBACK = "Hmm, something went wrong. Let us try again!"
 
-_EDUCATIONAL_LABELS = [
-    "a question about school subjects such as maths, reading, science, history, or nature",
-    "a message unrelated to school or learning",
-]
-_OFF_TOPIC_THRESHOLD = 0.85
+_OFF_TOPIC_SYSTEM_PROMPT = (
+    "You are a content filter for a Grade 1 educational app. "
+    "Reply with only 'yes' if the message is about school learning "
+    "(maths, reading, science, history, nature, or homework help). "
+    "Reply with only 'no' if it is clearly unrelated to school or learning."
+)
 
 _INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions",
@@ -43,7 +44,6 @@ _FUZZY_TARGETS = ["ignore", "instructions", "override", "system", "forget"]
 # ---------------------------------------------------------------------------
 
 _openai_client = None
-_nli_classifier = None
 
 
 def _get_openai():
@@ -54,15 +54,22 @@ def _get_openai():
     return _openai_client
 
 
-def _get_classifier():
-    global _nli_classifier
-    if _nli_classifier is None:
-        from transformers import pipeline
-        _nli_classifier = pipeline(
-            "zero-shot-classification",
-            model="cross-encoder/nli-MiniLM2-L6-H768",
+def _is_off_topic(text: str) -> bool:
+    """Return True if GPT-4o-mini judges the input unrelated to school learning."""
+    try:
+        response = _get_openai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _OFF_TOPIC_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=3,
+            temperature=0,
         )
-    return _nli_classifier
+        answer = response.choices[0].message.content.strip().lower()
+        return answer == "no"
+    except Exception:
+        return False  # fail-open: moderation API still applies as backstop
 
 
 # ---------------------------------------------------------------------------
@@ -179,11 +186,8 @@ def check_input(text: str) -> GuardrailResult:
     except ValueError:
         return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
 
-    # 3. NLI topic scope (local model, no API cost)
-    clf_result = _get_classifier()(text, _EDUCATIONAL_LABELS)
-    top_label = clf_result["labels"][0]
-    top_score = clf_result["scores"][0]
-    if top_label == _EDUCATIONAL_LABELS[1] and top_score >= _OFF_TOPIC_THRESHOLD:
+    # 3. Topic scope (gpt-4o-mini, ~$0.0001/call)
+    if _is_off_topic(text):
         return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
 
     # 4. OpenAI Moderation API
