@@ -45,7 +45,7 @@ export async function streamChat(
           continue;
         }
         if (eventLine === "token") onToken(payload.chunk as string);
-        else if (eventLine === "done") onDone(payload as DoneMeta);
+        else if (eventLine === "done") onDone(payload as unknown as DoneMeta);
         else if (eventLine === "error") { onError(payload.message as string); return; }
       }
     }

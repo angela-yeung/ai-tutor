@@ -11,7 +11,7 @@ export default function ReviewPanel({ concepts }: Props) {
 
   if (concepts.length === 0) return null;
 
-  const unique = [...new Set(concepts)];
+  const unique = Array.from(new Set(concepts));
 
   return (
     <div className="border-t border-emerald-200 bg-emerald-50">
