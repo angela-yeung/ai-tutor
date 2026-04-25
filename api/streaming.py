@@ -27,6 +27,7 @@ def _extract_metadata(state_snapshot) -> dict:
         "concept": v.get("concept", ""),
         "concepts_needing_review": v.get("concepts_needing_review", []),
         "conversation_history": v.get("conversation_history", []),
+        "current_response": v.get("current_response", ""),
     }
 
 

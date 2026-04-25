@@ -3,6 +3,7 @@ export interface DoneMeta {
   concept: string;
   concepts_needing_review: string[];
   conversation_history: { role: string; content: string }[];
+  current_response: string;
 }
 
 export interface Message {

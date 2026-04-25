@@ -9,8 +9,14 @@ import { streamChat } from "@/lib/chat";
 import { getThreadId, newSession } from "@/lib/session";
 import type { Message, DoneMeta } from "@/lib/types";
 
+const GREETING: Message = {
+  id: "greeting",
+  role: "assistant",
+  content: "Hi! I'm your tutor. What would you like to learn today?",
+};
+
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [conceptsNeedingReview, setConceptsNeedingReview] = useState<string[]>([]);
@@ -47,7 +53,9 @@ export default function ChatPage() {
   function finaliseAssistant(assistantId: string, meta: DoneMeta) {
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === assistantId ? { ...m, streaming: false } : m
+        m.id === assistantId
+          ? { ...m, content: meta.current_response || m.content, streaming: false }
+          : m
       )
     );
     setIsPaused(meta.session_paused);
@@ -81,7 +89,7 @@ export default function ChatPage() {
 
   function handleNewChat() {
     threadIdRef.current = newSession();
-    setMessages([]);
+    setMessages([GREETING]);
     setIsPaused(false);
     setConceptsNeedingReview([]);
     setError(null);
