@@ -27,6 +27,14 @@ _OFF_TOPIC_SYSTEM_PROMPT = (
     "Reply with only 'no' if it is clearly unrelated to school or learning."
 )
 
+_OFF_TOPIC_CONTEXT_SYSTEM_PROMPT = (
+    "You are a content filter for a Grade 1 educational app. "
+    "The student is in an ongoing tutoring conversation shown above. "
+    "Reply with only 'yes' if the student's latest message continues the learning conversation "
+    "(answering a tutor question, a follow-up, or asking about the same topic). "
+    "Reply with only 'no' if the message is clearly unrelated to the conversation or school learning."
+)
+
 _INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions",
     r"you\s+are\s+now\s+in\s+developer\s+mode",
@@ -54,15 +62,26 @@ def _get_openai():
     return _openai_client
 
 
-def _is_off_topic(text: str) -> bool:
-    """Return True if GPT-4o-mini judges the input unrelated to school learning."""
+def _is_off_topic(text: str, conversation_context: list | None = None) -> bool:
+    """Return True if GPT-4o-mini judges the input unrelated to school learning.
+
+    When conversation_context is provided (prior exchange messages), the check
+    considers whether the message is a continuation of the ongoing dialogue —
+    e.g. a short numeric answer like "14?" makes sense after a math question.
+    """
     try:
-        response = _get_openai().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
+        if conversation_context:
+            messages = [{"role": "system", "content": _OFF_TOPIC_CONTEXT_SYSTEM_PROMPT}]
+            messages.extend(conversation_context)
+            messages.append({"role": "user", "content": text})
+        else:
+            messages = [
                 {"role": "system", "content": _OFF_TOPIC_SYSTEM_PROMPT},
                 {"role": "user", "content": text},
-            ],
+            ]
+        response = _get_openai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
             max_tokens=3,
             temperature=0,
         )
@@ -170,9 +189,10 @@ def sanitise_input(text: str) -> str:
 # Guardrail checks
 # ---------------------------------------------------------------------------
 
-def check_input(text: str) -> GuardrailResult:
+def check_input(text: str, conversation_history: list | None = None) -> GuardrailResult:
     """Run all input guardrails in cheapest-first order.
 
+    conversation_history: recent messages from state (last ≤4 used for topic check).
     Returns GuardrailResult(blocked=False) if all checks pass.
     Returns GuardrailResult(blocked=True, message=...) on first failure.
     """
@@ -187,7 +207,8 @@ def check_input(text: str) -> GuardrailResult:
         return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
 
     # 3. Topic scope (gpt-4o-mini, ~$0.0001/call)
-    if _is_off_topic(text):
+    context = conversation_history[-4:] if conversation_history else None
+    if _is_off_topic(text, context):
         return GuardrailResult(blocked=True, message=_CHILD_DEFLECTION)
 
     # 4. OpenAI Moderation API

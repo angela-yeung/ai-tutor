@@ -103,11 +103,10 @@ def scaffold_hint(concept: str, strategies_tried: list[str]) -> dict:
         raise ValueError("All strategies exhausted")
 
     system_prompt = (
-        f'You are a Socratic tutor for 6-year-old Grade 1 students. '
+        f'You are a Socratic tutor for Grade 2-5 students (7-10 years old). '
         f'Generate a {chosen_strategy} hint for the concept "{concept}". '
-        f'Use sentences of 10 words or fewer. '
-        f'Use simple Grade 1 vocabulary. '
-        f'Use analogies from toys, food, animals, or everyday objects only. '
+        f'Use sentences of 20 words or fewer. '
+        f'Use simple vocabulary suitable for primary school students. '
         f'Return ONLY the hint text, nothing else.'
     )
     messages = [

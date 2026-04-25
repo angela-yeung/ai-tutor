@@ -173,6 +173,34 @@ def test_check_input_educational_passes():
     assert result.message == ""
 
 
+def test_check_input_short_answer_passes_with_math_context():
+    """Short numeric answer is not blocked when conversation history shows an active math problem."""
+    history = [
+        {"role": "user", "content": "what about 3 * 4?"},
+        {"role": "assistant", "content": "Imagine you have 3 groups of 4 apples. How many apples?"},
+    ]
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = _make_chat_response("yes")
+    mock_client.moderations.create.return_value = _make_moderation_response(False)
+
+    with patch("tutor.guardrails._get_openai", return_value=mock_client):
+        result = check_input("14?", conversation_history=history)
+
+    assert result.blocked is False
+
+
+def test_check_input_short_answer_blocked_without_context():
+    """Short numeric answer is blocked in isolation (no conversation context)."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = _make_chat_response("no")
+
+    with patch("tutor.guardrails._get_openai", return_value=mock_client):
+        result = check_input("14?")
+
+    mock_client.moderations.create.assert_not_called()
+    assert result.blocked is True
+
+
 # ---------------------------------------------------------------------------
 # check_output
 # ---------------------------------------------------------------------------

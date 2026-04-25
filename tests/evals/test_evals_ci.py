@@ -124,7 +124,7 @@ def test_age_rule_in_reasoning_loop():
 
 def test_age_rule_constant_defined():
     assert hasattr(nodes, "_AGE_RULE")
-    assert "10 words" in nodes._AGE_RULE
+    assert "words" in nodes._AGE_RULE
 
 
 def test_classify_prompt_arithmetic_is_reasoning():

@@ -55,9 +55,9 @@ def _date_context() -> str:
 
 
 _AGE_RULE = (
-    "ALWAYS use sentences of 10 words or fewer. "
-    "ONLY use words a 6-year-old Grade 1 student would know. "
-    "ONLY use analogies from: toys, food, animals, everyday home objects, playground. "
+    "ALWAYS use sentences of 20 words or fewer. "
+    "ONLY use words primary school students (aged 7 - 10) would know. "
+    "Use analogies from: toys, food, animals, everyday home objects, playground if appropriate. "
     "Use a warm, encouraging tone. Never say the student is wrong directly."
 )
 
@@ -363,7 +363,7 @@ def input_guard(state: TutorState) -> dict:
     On block: sets current_response to child-friendly message, input_blocked=True.
     On pass:  sets input_blocked=False, leaves state otherwise unchanged.
     """
-    result = check_input(state["student_input"])
+    result = check_input(state["student_input"], state.get("conversation_history", []))
     if result.blocked:
         return {"current_response": result.message, "input_blocked": True}
     return {"input_blocked": False}
