@@ -29,10 +29,11 @@ _OFF_TOPIC_SYSTEM_PROMPT = (
 
 _OFF_TOPIC_CONTEXT_SYSTEM_PROMPT = (
     "You are a content filter for a Grade 1 educational app. "
-    "The student is in an ongoing tutoring conversation shown above. "
-    "Reply with only 'yes' if the student's latest message continues the learning conversation "
-    "(answering a tutor question, a follow-up, or asking about the same topic). "
-    "Reply with only 'no' if the message is clearly unrelated to the conversation or school learning."
+    "The conversation history above provides context. "
+    "Reply with only 'yes' if the student's latest message is about learning "
+    "(maths, reading, science, history, nature, technology, homework help, "
+    "or is a direct response to the tutor's last question). "
+    "Reply with only 'no' if it is clearly unrelated to school or learning."
 )
 
 _INJECTION_PATTERNS = [
