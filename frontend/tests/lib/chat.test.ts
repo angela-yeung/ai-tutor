@@ -41,6 +41,7 @@ describe("streamChat — done event", () => {
       concept: "fractions",
       concepts_needing_review: ["fractions"],
       conversation_history: [],
+      current_response: "The answer is 3/4.",
     };
     mockFetch([
       `event: done\ndata: ${JSON.stringify(doneMeta)}\n\n`,

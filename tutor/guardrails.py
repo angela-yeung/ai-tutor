@@ -22,8 +22,8 @@ _OUTPUT_FALLBACK = "Hmm, something went wrong. Let us try again!"
 
 _OFF_TOPIC_SYSTEM_PROMPT = (
     "You are a content filter for a Grade 1 educational app. "
-    "Reply with only 'yes' if the message is about school learning "
-    "(maths, reading, science, history, nature, or homework help). "
+    "Reply with only 'yes' if the message is about learning "
+    "(maths, reading, science, history, nature, technology or homework help). "
     "Reply with only 'no' if it is clearly unrelated to school or learning."
 )
 
