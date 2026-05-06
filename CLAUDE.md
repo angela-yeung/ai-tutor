@@ -28,7 +28,7 @@ python -m tutor.cli --resume <thread_id>
 python tests/evals/run_phoenix_evals.py
 ```
 
-Requires `OPENAI_API_KEY` env var. All LLM calls use `gpt-4o`. `TAVILY_API_KEY` required for web search in factual loop.
+Requires `OPENAI_API_KEY` env var. Most LLM calls use `gpt-4o`; off-topic detection uses `gpt-4o-mini` (lower cost). `TAVILY_API_KEY` required for web search in factual loop.
 
 `REDIS_URL` optional — if set, uses `RedisSaver` for persistence (production); otherwise `MemorySaver` (local dev/tests).
 
@@ -93,7 +93,9 @@ A LangGraph `StateGraph` compiled with `MemorySaver`. Each CLI turn is one `invo
 
 **`route_after_classify`, `route_after_reasoning`, `entry_router`, `route_after_input_guard`** are pure functions (no LLM calls) — independently testable.
 
-**`guardrails.py`**: Houses all guardrail logic (injection detection, NLI topic scope, length cap, OpenAI moderation) called by `input_guard` and `output_guard` nodes.
+**`guardrails.py`**: Houses all guardrail logic (injection detection, NLI topic scope, length cap, OpenAI moderation) called by `input_guard` and `output_guard` nodes. Additional defenses: Unicode NFKC normalization (homoglyph attack), typoglycemia/fuzzy injection matching, base64 and hex-escape detection, context-aware off-topic checking (passes recent conversation history to gpt-4o-mini).
+
+**`instrumentation.py`**: Configures Phoenix/OpenTelemetry tracing. Called from `graph.py` on import; requires `PHOENIX_COLLECTOR_ENDPOINT` env var (optional — skipped silently if unset).
 
 ## State fields
 
@@ -111,6 +113,8 @@ Defined in `tutor/state.py` as a `TypedDict`. Key fields:
 ## Testing
 
 Always run the full test suite (`pytest`) after making code changes. Ensure all tests pass before considering a task complete.
+
+Test modules: `test_routing.py`, `test_classifier.py`, `test_guardrails.py`, `test_guardrail_nodes.py`, `test_graph_guardrails.py`, `test_tools.py`, `test_api.py`, `test_exhaustion.py`. Evals live in `tests/evals/`.
 
 ## Code Conventions
 
@@ -130,4 +134,4 @@ When debugging, check the actual root cause (API credits, network connectivity, 
 
 ## Prompt constraints
 
-All student-facing LLM calls include `_AGE_RULE` (sentences ≤10 words, Grade 1 vocabulary, analogies from toys/food/animals/home/playground only, warm tone). Do not remove or weaken this rule — it is a core product requirement for the Grade 1 target audience.
+All student-facing LLM calls include `_AGE_RULE` (sentences ≤20 words, vocabulary for primary school students aged 7–10, warm tone). Do not remove or weaken this rule — it is a core product requirement.
