@@ -6,7 +6,7 @@ import InputBar from "../../components/InputBar";
 describe("InputBar", () => {
   it("renders an input and a send button", () => {
     render(<InputBar onSend={vi.fn()} isStreaming={false} isPaused={false} />);
-    expect(screen.getByPlaceholderText(/type your question/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/ask pip/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
   });
 

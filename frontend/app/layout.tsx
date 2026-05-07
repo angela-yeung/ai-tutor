@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Tutor",
+  title: "Pip · AI Tutor",
   description: "A friendly AI tutor for Grade 1 students",
 };
 
@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-slate-50 h-screen`}>
+      <body className={`${inter.className} bg-stone-50 h-screen`}>
         {children}
       </body>
     </html>

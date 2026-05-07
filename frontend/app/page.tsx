@@ -5,6 +5,7 @@ import ChatWindow from "@/components/ChatWindow";
 import InputBar from "@/components/InputBar";
 import PausedBanner from "@/components/PausedBanner";
 import ReviewPanel from "@/components/ReviewPanel";
+import Sidebar from "@/components/Sidebar";
 import { streamChat } from "@/lib/chat";
 import { getThreadId, newSession } from "@/lib/session";
 import type { Message, DoneMeta } from "@/lib/types";
@@ -12,7 +13,7 @@ import type { Message, DoneMeta } from "@/lib/types";
 const GREETING: Message = {
   id: "greeting",
   role: "assistant",
-  content: "Hi! I'm your tutor. What would you like to learn today?",
+  content: "Hi Mia! I'm Pip. Want to warm up with a quick fractions puzzle, or jump into something else?",
 };
 
 export default function ChatPage() {
@@ -96,38 +97,52 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen max-w-[680px] mx-auto">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200">
-        <span className="text-xl font-semibold text-slate-800">AI Tutor</span>
-        <button
-          onClick={handleNewChat}
-          className="text-sm text-slate-500 hover:text-slate-800 transition-colors"
-        >
-          New Chat
-        </button>
-      </header>
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
 
-      {/* Paused banner */}
-      <PausedBanner isPaused={isPaused} onResume={handleResume} />
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col min-w-0 bg-stone-50">
+        {/* Header */}
+        <header className="flex items-center justify-between px-5 py-3 bg-white border-b border-stone-200 flex-none">
+          <div className="flex flex-col">
+            <span className="text-lg font-semibold text-stone-800">Pip</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-xs text-stone-500">Ready to help · Mia&apos;s tutor</span>
+            </div>
+          </div>
+          <button
+            onClick={handleNewChat}
+            aria-label="New chat"
+            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </header>
 
-      {/* Chat window */}
-      <ChatWindow messages={messages} />
+        {/* Paused banner */}
+        <PausedBanner isPaused={isPaused} onResume={handleResume} />
 
-      {/* Error message */}
-      {error && (
-        <p className="px-4 py-2 text-red-600 text-base">{error}</p>
-      )}
+        {/* Chat window */}
+        <ChatWindow messages={messages} onChipSend={handleSend} />
 
-      {/* Input bar */}
-      <InputBar
-        onSend={handleSend}
-        isStreaming={isStreaming}
-        isPaused={isPaused}
-      />
+        {/* Error message */}
+        {error && (
+          <p className="px-4 py-2 text-red-600 text-base">{error}</p>
+        )}
 
-      {/* Review panel */}
-      <ReviewPanel concepts={conceptsNeedingReview} />
+        {/* Input bar */}
+        <InputBar
+          onSend={handleSend}
+          isStreaming={isStreaming}
+          isPaused={isPaused}
+        />
+
+        {/* Review panel */}
+        <ReviewPanel concepts={conceptsNeedingReview} />
+      </div>
     </div>
   );
 }
